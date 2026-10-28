@@ -259,9 +259,31 @@ func (r *repository) FindAll(
 	var groups []entity.AccessGroup
 
 	err := tx.Model(&entity.AccessGroup{}).
-		Select("id", "name", "public_key").
+		Select("id", "name").
 		Where("sot_id = ?", sotID).
 		Order("name ASC").
+		Find(&groups).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return groups, nil
+}
+
+func (r *repository) FindKeysByIDs(
+	tx *gorm.DB,
+	sotID string,
+	groupIDs []string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+
+	if len(groupIDs) == 0 {
+		return groups, nil
+	}
+
+	err := tx.Model(&entity.AccessGroup{}).
+		Select("id", "public_key").
+		Where("sot_id = ? AND id IN ?", sotID, groupIDs).
 		Find(&groups).Error
 	if err != nil {
 		return nil, err

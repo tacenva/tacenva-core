@@ -12,6 +12,8 @@ type Service struct {
 	userService        *user.Service
 	accessunitService  *accessunit.Service
 	accessgroupService *accessgroup.Service
+
+	Internal *Internal
 }
 
 func NewService(
@@ -23,6 +25,12 @@ func NewService(
 		userService:        userService,
 		accessunitService:  accessunitService,
 		accessgroupService: accessgroupService,
+
+		Internal: NewInternalService(
+			userService,
+			accessunitService,
+			accessgroupService,
+		),
 	}
 }
 
@@ -32,7 +40,7 @@ func (s *Service) CreateGroup(
 	adminUnit *entity.AccessUnit,
 	parentGroupID string,
 	wrappedGroupKey string,
-	wrappedChildKey string, // optional
+	wrappedHierarchyKey string, // optional
 ) error {
 	if parentGroupID == "" {
 		// return
@@ -45,7 +53,7 @@ func (s *Service) CreateGroup(
 		adminUnit,
 		parentGroupID,
 		wrappedGroupKey,
-		wrappedChildKey,
+		wrappedHierarchyKey,
 	)
 }
 
@@ -80,4 +88,80 @@ func (s *Service) GroupWithChildren(
 		authorizer.AccessUnit.SotID,
 		id,
 	)
+}
+
+func (s *Service) List(
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	return s.accessgroupService.List(
+		sotID,
+	)
+}
+
+func (s *Service) PublicKeyOfGroups(
+	authorizer *entity.User,
+	groupIDS []string,
+) (map[string]string, error) {
+	return s.accessgroupService.PublicKeyList(
+		authorizer.AccessUnit.SotID,
+		groupIDS,
+	)
+}
+
+func (s *Service) SyncGroups(
+	sotID string,
+	groups []entity.AccessGroup,
+) error {
+	return s.accessgroupService.SyncGroups(sotID, groups)
+}
+
+func (s *Service) CreateUnit(
+	sotID string,
+	accessUnit *entity.AccessUnit,
+	wrappedGroupKey string,
+) error {
+	return s.accessunitService.CreateUnit(
+		sotID,
+		accessUnit,
+		wrappedGroupKey,
+	)
+}
+
+func (s *Service) UpdateUnit(
+	sotID string,
+	accessUnit *entity.AccessUnit,
+) error {
+	return s.accessunitService.UpdateUnit(
+		sotID,
+		accessUnit,
+	)
+}
+
+func (s *Service) DeleteUnit(
+	sotID string,
+	unitID string,
+) error {
+	return s.accessunitService.DeleteUnit(
+		sotID,
+		unitID,
+	)
+}
+
+func (s *Service) SetRevokeUnit(
+	sotID string,
+	unitID string,
+	isRevoked bool,
+) error {
+	return s.accessunitService.SetRevokeUnit(
+		sotID,
+		unitID,
+		isRevoked,
+	)
+}
+
+func (s *Service) UnitList(
+	sotID string,
+	groupID string,
+) ([]contract.AccessUnitWithUserCount, error) {
+	return s.accessunitService.UnitsByGroup(sotID, groupID)
 }

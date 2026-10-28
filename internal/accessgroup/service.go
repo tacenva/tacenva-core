@@ -11,8 +11,8 @@ import (
 type Service struct {
 	repository *repository
 	createUnit func(
+		tx *gorm.DB,
 		sotID string,
-		authorizerGroupID string,
 		accessUnit *entity.AccessUnit,
 		wrappedGroupKey string,
 	) error
@@ -21,8 +21,8 @@ type Service struct {
 func NewService(
 	repository *repository,
 	createUnit func(
+		tx *gorm.DB,
 		sotID string,
-		authorizerGroupID string,
 		accessUnit *entity.AccessUnit,
 		wrappedGroupKey string,
 	) error,
@@ -40,7 +40,7 @@ func (s *Service) CreateGroup(
 	adminUnit *entity.AccessUnit,
 	parentGroupID string, // optional
 	wrappedGroupKey string,
-	wrappedChildKey string, // optional
+	wrappedHierarchyKey string, // optional
 ) error {
 	if adminUnit == nil || accessGroup == nil {
 		// return
@@ -62,8 +62,8 @@ func (s *Service) CreateGroup(
 				ChildGroupID:  accessGroup.ID,
 			}
 
-			if wrappedChildKey != "" { // parent can access child
-				accessGroupHierarchy.WrappedChildKey = wrappedChildKey
+			if wrappedHierarchyKey != "" { // parent can access child
+				accessGroupHierarchy.WrappedChildKey = wrappedHierarchyKey
 			}
 
 			err = s.repository.CreateGroupHierarchy(tx, &accessGroupHierarchy)
@@ -76,8 +76,8 @@ func (s *Service) CreateGroup(
 		adminUnit.GroupID = accessGroup.ID
 		adminUnit.Level = entity.LevelAdmin
 		err = s.createUnit(
+			tx,
 			sotID,
-			authorizerGroupID,
 			adminUnit,
 			wrappedGroupKey,
 		)
@@ -165,6 +165,31 @@ func (s *Service) List(
 		return nil, err
 	}
 	return groups, nil
+}
+
+func (s *Service) PublicKeyList(
+	sotID string,
+	groupIDs []string,
+) (map[string]string, error) {
+	publicKeys := make(map[string]string, len(groupIDs))
+
+	err := s.repository.Transaction(func(tx *gorm.DB) error {
+		groups, err := s.repository.FindKeysByIDs(tx, sotID, groupIDs)
+		if err != nil {
+			return err
+		}
+
+		for _, group := range groups {
+			publicKeys[group.ID] = group.PublicKey
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return publicKeys, nil
 }
 
 func (s *Service) SyncGroups(

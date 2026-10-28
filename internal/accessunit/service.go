@@ -1,6 +1,7 @@
 package accessunit
 
 import (
+	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
 	"gorm.io/gorm"
 )
@@ -15,9 +16,9 @@ func NewService(repository *repository) *Service {
 	}
 }
 
-func (s *Service) CreateUnit(
+func (s *Service) CreateUnitByTx(
+	tx *gorm.DB,
 	sotID string,
-	authorizerGroupID string,
 	accessUnit *entity.AccessUnit,
 	wrappedGroupKey string,
 ) error {
@@ -25,12 +26,12 @@ func (s *Service) CreateUnit(
 		// return
 	}
 
-	if accessUnit.GroupID != authorizerGroupID {
-		// return
-	}
+	// if accessUnit.GroupID != authorizerGroupID {
+	// 	// return
+	// }
 
 	accessUnit.SotID = sotID
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	return tx.Transaction(func(tx *gorm.DB) error {
 		err := s.repository.CreateUnit(tx, accessUnit)
 		if err != nil {
 			return err
@@ -50,6 +51,19 @@ func (s *Service) CreateUnit(
 
 		return nil
 	})
+}
+
+func (s *Service) CreateUnit(
+	sotID string,
+	accessUnit *entity.AccessUnit,
+	wrappedGroupKey string,
+) error {
+	return s.CreateUnitByTx(
+		s.repository.db,
+		sotID,
+		accessUnit,
+		wrappedGroupKey,
+	)
 }
 
 // func (s *Service) Simulate() error {
@@ -85,14 +99,14 @@ func (s *Service) CreateUnit(
 
 func (s *Service) UpdateUnit(
 	sotID string,
-	authorizerGroupID string,
 	accessUnit *entity.AccessUnit,
 ) error {
 	if accessUnit == nil {
 		// return
 	}
 
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	db := s.repository.db
+	return db.Transaction(func(tx *gorm.DB) error {
 		current, err := s.repository.GetUnitByID(tx, accessUnit.ID, sotID)
 		if err != nil {
 			return err
@@ -109,66 +123,26 @@ func (s *Service) UpdateUnit(
 
 func (s *Service) DeleteUnit(
 	sotID string,
-	authorizerGroupID string,
 	id string,
 ) error {
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	db := s.repository.db
+	return db.Transaction(func(tx *gorm.DB) error {
 		return s.repository.DeleteUnit(tx, id, sotID)
 	})
 }
 
 func (s *Service) UnitsByGroup(
 	sotID string,
-	authorizerGroupID string,
 	id string,
-) ([]AccessUnitWithUserCount, error) {
-	var units []AccessUnitWithUserCount
-
-	err := s.repository.Transaction(func(tx *gorm.DB) error {
-		result, err := s.repository.GetUnitsByGroup(
-			tx,
-			id,
-			sotID,
-		)
-		if err != nil {
-			return err
-		}
-
-		units = result
-		return nil
-	})
+) ([]contract.AccessUnitWithUserCount, error) {
+	result, err := s.repository.GetUnitsByGroup(
+		id,
+		sotID,
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	return units, nil
-}
-
-func (s *Service) UsersByUnit(
-	sotID string,
-	authorizerGroupID string,
-	unitID string,
-) ([]entity.User, error) {
-	var users []entity.User
-
-	err := s.repository.Transaction(func(tx *gorm.DB) error {
-		result, err := s.repository.GetUsersByUnit(
-			tx,
-			unitID,
-			sotID,
-		)
-		if err != nil {
-			return err
-		}
-
-		users = result
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return users, nil
+	return result, nil
 }
 
 func (s *Service) SetRevokeUnit(
@@ -176,7 +150,8 @@ func (s *Service) SetRevokeUnit(
 	unitID string,
 	isRevoked bool,
 ) error {
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	db := s.repository.db
+	return db.Transaction(func(tx *gorm.DB) error {
 		current, err := s.repository.GetUnitByID(tx, unitID, sotID)
 		if err != nil {
 			return err
@@ -195,4 +170,10 @@ func (s *Service) GetUnitByPublicKey(
 		sotID,
 		publicKey,
 	)
+}
+
+func (s *Service) List(
+	sotID string,
+) ([]entity.AccessUnit, error) {
+	return s.repository.FindAll(sotID)
 }

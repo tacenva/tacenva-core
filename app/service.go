@@ -20,6 +20,7 @@ type Services struct {
 func NewServices(
 	sqliteDB *gorm.DB,
 	tacenvaDB *database.DB,
+	sotHostname string,
 ) *Services {
 	userService := user.NewService(
 		user.NewRepository(sqliteDB),
@@ -31,7 +32,7 @@ func NewServices(
 
 	accessgroupService := accessgroup.NewService(
 		accessgroup.NewRepository(sqliteDB),
-		accessunitService.CreateUnit,
+		accessunitService.CreateUnitByTx,
 	)
 
 	syncService := sync.NewService(
@@ -49,7 +50,7 @@ func NewServices(
 		userService,
 		accessunitService,
 		accessgroupService,
-		"",
+		sotHostname,
 	)
 
 	return &Services{

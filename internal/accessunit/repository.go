@@ -1,6 +1,7 @@
 package accessunit
 
 import (
+	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
 	"gorm.io/gorm"
 )
@@ -13,12 +14,6 @@ func NewRepository(db *gorm.DB) *repository {
 	return &repository{
 		db: db,
 	}
-}
-
-func (r *repository) Transaction(
-	fn func(tx *gorm.DB) error,
-) error {
-	return r.db.Transaction(fn)
 }
 
 func (r *repository) CreateUnit(
@@ -100,19 +95,13 @@ func (r *repository) GetUnitByPublicKey(
 	return &accessUnit, nil
 }
 
-type AccessUnitWithUserCount struct {
-	entity.AccessUnit
-	UserCount int64 `json:"user_count"`
-}
-
 func (r *repository) GetUnitsByGroup(
-	tx *gorm.DB,
 	groupID string,
 	sotID string,
-) ([]AccessUnitWithUserCount, error) {
-	var units []AccessUnitWithUserCount
+) ([]contract.AccessUnitWithUserCount, error) {
+	var units []contract.AccessUnitWithUserCount
 
-	err := tx.
+	err := r.db.
 		Table("access_units AS au").
 		Select(`
 			au.*,
@@ -138,17 +127,16 @@ func (r *repository) GetUnitsByGroup(
 }
 
 func (r *repository) GetUsersByUnit(
-	tx *gorm.DB,
 	unitID string,
 	sotID string,
 ) ([]entity.User, error) {
 	var users []entity.User
 
-	err := tx.
+	err := r.db.
 		Where(
 			"access_unit_id = ? AND access_unit_id IN (?)",
 			unitID,
-			tx.Model(&entity.AccessUnit{}).
+			r.db.Model(&entity.AccessUnit{}).
 				Select("id").
 				Where("sot_id = ?", sotID),
 		).
@@ -159,4 +147,19 @@ func (r *repository) GetUsersByUnit(
 	}
 
 	return users, nil
+}
+
+func (r *repository) FindAll(
+	sotID string,
+) ([]entity.AccessUnit, error) {
+	var result []entity.AccessUnit
+
+	err := r.db.
+		Where("sot_id = ?", sotID).
+		Find(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

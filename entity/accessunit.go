@@ -17,7 +17,7 @@ type AccessUnit struct {
 	ID          string      `json:"id" gorm:"type:varchar(26);primaryKey"`
 	Name        string      `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_unit_name"`
 	GroupID     string      `json:"group_id" gorm:"type:varchar(26);not null;uniqueIndex:idx_unit_name"`
-	SotID       string      `json:"sot_id" gorm:"type:varchar(26);not null;uniqueIndex:idx_unit_name"`
+	SotID       string      `json:"-" gorm:"type:varchar(26);not null;uniqueIndex:idx_unit_name"`
 	Level       AccessLevel `json:"level" gorm:"type:varchar(10);not null"`
 	PublicKey   string      `json:"public_key" gorm:"type:text;not null"`
 	Revoked     bool        `json:"revoked" gorm:"not null;default:false"`

@@ -23,7 +23,7 @@ func (r *repository) Create(user *entity.User) error {
 	}
 
 	return r.db.
-		Preload("Permission").
+		Preload("AccessUnit").
 		First(user, "id = ?", user.ID).Error
 }
 

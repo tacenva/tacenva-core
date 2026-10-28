@@ -53,7 +53,7 @@ func (s *Service) Enroll(
 	)
 
 	response := contract.EnrollResponse{
-		SoTHostname: s.sotHostname,
+		SotHostname: s.sotHostname,
 		Status:      userStatus,
 		AuthToken:   token,
 		AccessLevel: accessUnit.Level,

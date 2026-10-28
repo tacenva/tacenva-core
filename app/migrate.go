@@ -11,9 +11,11 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	return db.AutoMigrate(
-		// &entity.Permission{},
-		// &entity.PermissionGroup{},
-		// &entity.PermissionGroupHierarchy{},
+		&entity.AccessUnit{},
+		&entity.AccessGroup{},
+		&entity.AccessGroupHierarchy{},
+		&entity.AccessGroupKey{},
+
 		&entity.User{},
 		&entity.SyncChange{},
 		&entity.SyncState{},

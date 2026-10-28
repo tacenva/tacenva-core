@@ -2,15 +2,36 @@ package accesscontrol
 
 import (
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/internal/accessgroup"
+	"github.com/tacenva/tacenva-core/internal/accessunit"
+	"github.com/tacenva/tacenva-core/internal/user"
 	"github.com/tacenva/tacenva-core/util/keyring"
 )
 
-func (s *Service) InitAccess(
+type Internal struct {
+	userService        *user.Service
+	accessunitService  *accessunit.Service
+	accessgroupService *accessgroup.Service
+}
+
+func NewInternalService(
+	userService *user.Service,
+	accessunitService *accessunit.Service,
+	accessgroupService *accessgroup.Service,
+) *Internal {
+	return &Internal{
+		userService:        userService,
+		accessunitService:  accessunitService,
+		accessgroupService: accessgroupService,
+	}
+}
+
+func (s *Internal) InitAccess(
 	sotID string,
-) (*keyring.KeyPair, error) {
-	keyPairOfGroup, err := keyring.GenerateKeyPair()
+) (keyPairOfUnit, keyPairOfGroup *keyring.KeyPair, err error) {
+	keyPairOfGroup, err = keyring.GenerateKeyPair()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	accessGroup := entity.AccessGroup{
@@ -19,10 +40,11 @@ func (s *Service) InitAccess(
 		PublicKey: keyPairOfGroup.PublicKey,
 	}
 
-	keyPairOfUnit, err := keyring.GenerateKeyPair()
+	keyPairOfUnit, err = keyring.GenerateKeyPair()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
 	adminUnit := entity.AccessUnit{
 		Name:        accessGroup.Name,
 		SotID:       sotID,
@@ -31,12 +53,14 @@ func (s *Service) InitAccess(
 		PublicKey:   keyPairOfUnit.PublicKey,
 	}
 
-	wrappedGroupKey, err := keyPairOfUnit.Seal([]byte(keyPairOfGroup.PrivateKey))
+	wrappedGroupKey, err := keyPairOfUnit.Seal(
+		[]byte(keyPairOfGroup.PrivateKey),
+	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if err = s.accessgroupService.CreateGroup(
+	err = s.accessgroupService.CreateGroup(
 		sotID,
 		"",
 		&accessGroup,
@@ -44,9 +68,36 @@ func (s *Service) InitAccess(
 		"",
 		wrappedGroupKey,
 		"",
-	); err != nil {
-		return nil, err
+	)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return keyPairOfUnit, nil
+	return keyPairOfUnit, keyPairOfGroup, nil
+}
+
+func (s *Internal) AccessUnitList(
+	sotID string,
+) ([]entity.AccessUnit, error) {
+	return s.accessunitService.List(sotID)
+}
+
+func (s *Internal) UserList(
+	sotID,
+	unitID string,
+) ([]entity.User, error) {
+	return s.accessunitService.UsersByUnit(
+		sotID,
+		unitID,
+	)
+}
+
+func (s *Internal) SetUserStatus(
+	userID string,
+	status entity.UserStatus,
+) error {
+	return s.userService.UpdateStatus(
+		userID,
+		status,
+	)
 }

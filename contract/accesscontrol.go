@@ -14,3 +14,12 @@ type AccessGroupHierarchyWithCount struct {
 	AccessUnitCount int64 `json:"access_unit_count"`
 	UserCount       int64 `json:"user_count"`
 }
+
+type PublicKeyOfGroupsReq struct {
+	GroupIDs []string `json:"group_ids"`
+}
+
+type AccessUnitWithUserCount struct {
+	entity.AccessUnit
+	UserCount int64 `json:"user_count"`
+}
