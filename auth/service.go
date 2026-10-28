@@ -1,31 +1,31 @@
 package auth
 
 import (
-	"errors"
-	"os"
-
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/internal/accessgroup"
+	"github.com/tacenva/tacenva-core/internal/accessunit"
 	"github.com/tacenva/tacenva-core/internal/user"
-	"github.com/tacenva/tacenva-core/permission"
-)
-
-var (
-	ErrPermission = errors.New("permission denied")
 )
 
 type Service struct {
-	userService       *user.Service
-	permissionService *permission.Service
+	userService        *user.Service
+	accessunitService  *accessunit.Service
+	accessgroupService *accessgroup.Service
+	sotHostname        string
 }
 
 func NewService(
 	userService *user.Service,
-	permissionService *permission.Service,
+	accessunitService *accessunit.Service,
+	accessgroupService *accessgroup.Service,
+	sotHostname string,
 ) *Service {
 	return &Service{
-		userService:       userService,
-		permissionService: permissionService,
+		userService:        userService,
+		accessunitService:  accessunitService,
+		accessgroupService: accessgroupService,
+		sotHostname:        sotHostname,
 	}
 }
 
@@ -34,44 +34,43 @@ func (s *Service) Enroll(
 	sotID string,
 	userStatus entity.UserStatus,
 ) (*contract.EnrollResponse, error) {
-	permission, err := s.permissionService.GetByPublicKey(enrollRequest.PublicKey)
+	accessUnit, err := s.accessunitService.GetUnitByPublicKey(
+		sotID,
+		enrollRequest.PublicKey,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if userStatus == entity.UserStatusPending && permission.AutoApprove {
+	if userStatus == entity.UserStatusPending && accessUnit.AutoApprove {
 		userStatus = entity.UserStatusApproved
 	}
 
-	user, token, err := s.userService.Create(enrollRequest.Hostname, permission.ID, userStatus)
-	if err != nil {
-		return nil, err
-	}
-
-	sotHostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
+	user, token, err := s.userService.Create(
+		enrollRequest.Hostname,
+		accessUnit.ID,
+		userStatus,
+	)
 
 	response := contract.EnrollResponse{
-		SoTHostname: sotHostname,
+		SoTHostname: s.sotHostname,
 		Status:      userStatus,
 		AuthToken:   token,
-		Privilege:   permission.Privilege,
+		AccessLevel: accessUnit.Level,
 	}
 
 	if userStatus == entity.UserStatusApproved {
-		var groups []entity.PermissionGroup
+		var groups []entity.AccessGroup
 
-		if permission.Privilege != entity.PrivilegeRead {
-			groups, err = s.permissionService.GroupList(sotID)
+		if accessUnit.Level != entity.LevelRead {
+			groups, err = s.accessgroupService.List(sotID)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		response.GroupAssignment = &contract.GroupAssignment{
-			ID:    user.Permission.GroupID,
+			ID:    user.AccessUnit.GroupID,
 			Items: groups,
 		}
 	}
@@ -85,8 +84,8 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 		return nil, err
 	}
 
-	if userData.Permission.Revoked {
-		return nil, permission.ErrRevoked
+	if userData.AccessUnit.Revoked {
+		// return nil, permission.ErrRevoked
 	}
 
 	switch userData.Status {
@@ -104,7 +103,7 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 	}
 }
 
-func (s *Service) CheckStatus(
+func (s *Service) GetAuthDataWithGroupList(
 	token string,
 	sotID string,
 ) (*contract.AuthData, error) {
@@ -114,47 +113,27 @@ func (s *Service) CheckStatus(
 	}
 
 	authData := contract.AuthData{
-		Status:    userData.Status,
-		Privilege: userData.Permission.Privilege,
+		Status:      userData.Status,
+		AccessLevel: userData.AccessUnit.Level,
 	}
 
-	if userData.Permission.Revoked {
+	if userData.AccessUnit.Revoked {
 		authData.Status = entity.UserStatusRevoked
-		return &authData, permission.ErrRevoked
+		// return &authData, permission.ErrRevoked
 	}
 
-	var groups []entity.PermissionGroup
-	if userData.HasWritePermission() {
-		groups, err = s.permissionService.GroupList(sotID)
-		if err != nil {
-			return nil, err
-		}
+	var groups []entity.AccessGroup
+	// if userData.HasWritePermission() {
+	groups, err = s.accessgroupService.List(sotID)
+	if err != nil {
+		return nil, err
 	}
+	// }
 
 	authData.GroupAssignment = &contract.GroupAssignment{
-		ID:    userData.Permission.GroupID,
+		ID:    userData.AccessUnit.GroupID,
 		Items: groups,
 	}
 
 	return &authData, nil
-}
-
-func (s *Service) GroupAssignment(
-	authUser *entity.User,
-	sotID string,
-) (*contract.GroupAssignment, error) {
-	var groups []entity.PermissionGroup
-
-	if authUser.HasWritePermission() {
-		var err error
-		groups, err = s.permissionService.GroupList(sotID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &contract.GroupAssignment{
-		ID:    authUser.Permission.GroupID,
-		Items: groups,
-	}, nil
 }

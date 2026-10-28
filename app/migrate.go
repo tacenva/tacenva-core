@@ -11,9 +11,9 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	return db.AutoMigrate(
-		&entity.Permission{},
-		&entity.PermissionGroup{},
-		&entity.PermissionGroupHierarchy{},
+		// &entity.Permission{},
+		// &entity.PermissionGroup{},
+		// &entity.PermissionGroupHierarchy{},
 		&entity.User{},
 		&entity.SyncChange{},
 		&entity.SyncState{},

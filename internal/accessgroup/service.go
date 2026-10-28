@@ -1,0 +1,246 @@
+package accessgroup
+
+import (
+	"errors"
+
+	"github.com/tacenva/tacenva-core/contract"
+	"github.com/tacenva/tacenva-core/entity"
+	"gorm.io/gorm"
+)
+
+type Service struct {
+	repository *repository
+	createUnit func(
+		sotID string,
+		authorizerGroupID string,
+		accessUnit *entity.AccessUnit,
+		wrappedGroupKey string,
+	) error
+}
+
+func NewService(
+	repository *repository,
+	createUnit func(
+		sotID string,
+		authorizerGroupID string,
+		accessUnit *entity.AccessUnit,
+		wrappedGroupKey string,
+	) error,
+) *Service {
+	return &Service{
+		repository: repository,
+		createUnit: createUnit,
+	}
+}
+
+func (s *Service) CreateGroup(
+	sotID string,
+	authorizerGroupID string,
+	accessGroup *entity.AccessGroup,
+	adminUnit *entity.AccessUnit,
+	parentGroupID string, // optional
+	wrappedGroupKey string,
+	wrappedChildKey string, // optional
+) error {
+	if adminUnit == nil || accessGroup == nil {
+		// return
+	}
+
+	return s.repository.Transaction(func(tx *gorm.DB) error {
+		// 1: create group first
+		accessGroup.SotID = sotID
+		err := s.repository.CreateGroup(tx, accessGroup)
+		if err != nil {
+			return err
+		}
+
+		// 2: create hierarchy
+		if parentGroupID != "" {
+			accessGroupHierarchy := entity.AccessGroupHierarchy{
+				SotID:         sotID,
+				ParentGroupID: parentGroupID,
+				ChildGroupID:  accessGroup.ID,
+			}
+
+			if wrappedChildKey != "" { // parent can access child
+				accessGroupHierarchy.WrappedChildKey = wrappedChildKey
+			}
+
+			err = s.repository.CreateGroupHierarchy(tx, &accessGroupHierarchy)
+			if err != nil {
+				return err
+			}
+		}
+
+		// 3: create admin (unit & groupkey)
+		adminUnit.GroupID = accessGroup.ID
+		adminUnit.Level = entity.LevelAdmin
+		err = s.createUnit(
+			sotID,
+			authorizerGroupID,
+			adminUnit,
+			wrappedGroupKey,
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (s *Service) UpdateGroup(
+	sotID string,
+	authorizerGroupID string,
+	accessGroup *entity.AccessGroup,
+) error {
+	if accessGroup == nil {
+		// return
+	}
+
+	return s.repository.Transaction(func(tx *gorm.DB) error {
+		current, err := s.repository.GetGroupByID(tx, accessGroup.ID, sotID)
+		if err != nil {
+			return err
+		}
+
+		if accessGroup.PublicKey != current.PublicKey {
+			// return
+		}
+
+		err = s.repository.UpdateGroup(tx, accessGroup)
+		return err
+	})
+}
+
+func (s *Service) DeleteGroup(
+	sotID string,
+	authorizerGroupID string,
+	id string,
+) error {
+	return s.repository.Transaction(func(tx *gorm.DB) error {
+		return s.repository.DeleteGroup(tx, id, sotID)
+	})
+}
+
+func (s *Service) GroupWithChildren(
+	sotID string,
+	id string,
+) ([]contract.AccessGroupTree, error) {
+	var groups []contract.AccessGroupTree
+
+	err := s.repository.Transaction(func(tx *gorm.DB) error {
+		result, err := s.repository.GetGroupWithChildren(
+			tx,
+			id,
+			sotID,
+		)
+		if err != nil {
+			return err
+		}
+
+		groups = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return groups, nil
+}
+
+func (s *Service) List(
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+	err := s.repository.Transaction(func(tx *gorm.DB) error {
+		result, err := s.repository.FindAll(tx, sotID)
+		if err != nil {
+			return err
+		}
+		groups = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+func (s *Service) SyncGroups(
+	sotID string,
+	groups []entity.AccessGroup,
+) error {
+	if sotID == "" {
+		return errors.New("sot ID cannot be empty")
+	}
+
+	// Validasi input dan cegah ID duplikat.
+	incoming := make(map[string]entity.AccessGroup, len(groups))
+
+	for _, group := range groups {
+		if group.ID == "" {
+			return errors.New("group ID cannot be empty")
+		}
+		if group.Name == "" {
+			return errors.New("group name cannot be empty")
+		}
+		if group.PublicKey == "" {
+			return errors.New("group public key cannot be empty")
+		}
+		if _, exists := incoming[group.ID]; exists {
+			return errors.New("duplicate group ID: " + group.ID)
+		}
+
+		incoming[group.ID] = group
+	}
+
+	return s.repository.Transaction(func(tx *gorm.DB) error {
+		existing, err := s.repository.FindAll(tx, sotID)
+		if err != nil {
+			return err
+		}
+
+		existingByID := make(map[string]entity.AccessGroup, len(existing))
+		for _, group := range existing {
+			existingByID[group.ID] = group
+		}
+
+		var toCreate []entity.AccessGroup
+		var toUpdate []entity.AccessGroup
+		var toDelete []string
+
+		for id, group := range incoming {
+			current, exists := existingByID[id]
+			if !exists {
+				toCreate = append(toCreate, group)
+				continue
+			}
+
+			if current.Name != group.Name ||
+				current.PublicKey != group.PublicKey {
+				toUpdate = append(toUpdate, group)
+			}
+		}
+
+		for id := range existingByID {
+			if _, exists := incoming[id]; !exists {
+				toDelete = append(toDelete, id)
+			}
+		}
+
+		if err := s.repository.CreateGroupsBulk(tx, sotID, toCreate); err != nil {
+			return err
+		}
+
+		if err := s.repository.UpdateGroupsBulk(tx, sotID, toUpdate); err != nil {
+			return err
+		}
+
+		if err := s.repository.DeleteGroupsBulk(tx, sotID, toDelete); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}

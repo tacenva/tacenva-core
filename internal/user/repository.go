@@ -86,10 +86,10 @@ func (r *repository) Update(user *entity.User) error {
 		Model(&entity.User{}).
 		Where("id = ?", user.ID).
 		Updates(map[string]any{
-			"permission_id": user.PermissionID,
-			"hostname":      user.Hostname,
-			"token":         user.Token,
-			"status":        user.Status,
+			"access_unit_id": user.AccessUnitID,
+			"hostname":       user.Hostname,
+			"token":          user.Token,
+			"status":         user.Status,
 		}).
 		Error
 }

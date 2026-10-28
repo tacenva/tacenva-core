@@ -2,11 +2,11 @@ package keyring
 
 import (
 	"crypto/hpke"
-	"encoding/base64"
+	"encoding/hex"
 )
 
 func (k *KeyPair) Seal(data []byte) (string, error) {
-	publicKeyBytes, err := base64.RawURLEncoding.DecodeString(k.PublicKey)
+	publicKeyBytes, err := hex.DecodeString(k.PublicKey)
 	if err != nil {
 		return "", err
 	}
@@ -27,16 +27,16 @@ func (k *KeyPair) Seal(data []byte) (string, error) {
 		return "", err
 	}
 
-	return base64.RawURLEncoding.EncodeToString(sealed), nil
+	return hex.EncodeToString(sealed), nil
 }
 
 func (k *KeyPair) Open(data string) ([]byte, error) {
-	privateKeyBytes, err := base64.RawURLEncoding.DecodeString(k.PrivateKey)
+	privateKeyBytes, err := hex.DecodeString(k.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	sealed, err := base64.RawURLEncoding.DecodeString(data)
+	sealed, err := hex.DecodeString(data)
 	if err != nil {
 		return nil, err
 	}
