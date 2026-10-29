@@ -5,6 +5,7 @@ import (
 
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
 )
 
@@ -43,10 +44,10 @@ func (s *Service) CreateGroup(
 	wrappedHierarchyKey string, // optional
 ) error {
 	if adminUnit == nil || accessGroup == nil {
-		// return
+		return errAccessAssigned
 	}
 
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	return s.repository.db.Transaction(func(tx *gorm.DB) error {
 		// 1: create group first
 		accessGroup.SotID = sotID
 		err := s.repository.CreateGroup(tx, accessGroup)
@@ -95,17 +96,17 @@ func (s *Service) UpdateGroup(
 	accessGroup *entity.AccessGroup,
 ) error {
 	if accessGroup == nil {
-		// return
+		return genericerror.ErrEmptyValue
 	}
 
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	return s.repository.db.Transaction(func(tx *gorm.DB) error {
 		current, err := s.repository.GetGroupByID(tx, accessGroup.ID, sotID)
 		if err != nil {
 			return err
 		}
 
 		if accessGroup.PublicKey != current.PublicKey {
-			// return
+			return genericerror.ErrImutableField
 		}
 
 		err = s.repository.UpdateGroup(tx, accessGroup)
@@ -118,7 +119,7 @@ func (s *Service) DeleteGroup(
 	authorizerGroupID string,
 	id string,
 ) error {
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	return s.repository.db.Transaction(func(tx *gorm.DB) error {
 		return s.repository.DeleteGroup(tx, id, sotID)
 	})
 }
@@ -129,7 +130,7 @@ func (s *Service) GroupWithChildren(
 ) ([]contract.AccessGroupTree, error) {
 	var groups []contract.AccessGroupTree
 
-	err := s.repository.Transaction(func(tx *gorm.DB) error {
+	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
 		result, err := s.repository.GetGroupWithChildren(
 			tx,
 			id,
@@ -153,7 +154,7 @@ func (s *Service) List(
 	sotID string,
 ) ([]entity.AccessGroup, error) {
 	var groups []entity.AccessGroup
-	err := s.repository.Transaction(func(tx *gorm.DB) error {
+	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
 		result, err := s.repository.FindAll(tx, sotID)
 		if err != nil {
 			return err
@@ -173,7 +174,7 @@ func (s *Service) PublicKeyList(
 ) (map[string]string, error) {
 	publicKeys := make(map[string]string, len(groupIDs))
 
-	err := s.repository.Transaction(func(tx *gorm.DB) error {
+	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
 		groups, err := s.repository.FindKeysByIDs(tx, sotID, groupIDs)
 		if err != nil {
 			return err
@@ -220,7 +221,7 @@ func (s *Service) SyncGroups(
 		incoming[group.ID] = group
 	}
 
-	return s.repository.Transaction(func(tx *gorm.DB) error {
+	return s.repository.db.Transaction(func(tx *gorm.DB) error {
 		existing, err := s.repository.FindAll(tx, sotID)
 		if err != nil {
 			return err

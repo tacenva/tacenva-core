@@ -13,8 +13,8 @@ var (
 )
 
 type KeyPair struct {
-	PublicKey  string
-	PrivateKey string
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
 }
 
 func GenerateKeyPair() (*KeyPair, error) {

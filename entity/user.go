@@ -2,7 +2,6 @@ package entity
 
 import (
 	"github.com/oklog/ulid/v2"
-	"github.com/tacenva/tacenva-core/util/credential"
 	"gorm.io/gorm"
 )
 
@@ -47,12 +46,6 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {
 		u.ID = ulid.Make().String()
 	}
-
-	token, err := credential.Generate(uint(TokenSize))
-	if err != nil {
-		return err
-	}
-	u.Token = token
 
 	return nil
 }

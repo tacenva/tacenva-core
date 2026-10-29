@@ -18,6 +18,6 @@ func Generate(tokenSize uint) (string, error) {
 
 func Hash(token string) string {
 	hash := sha256.Sum256([]byte(token))
-
-	return base64.RawURLEncoding.EncodeToString(hash[:])
+	encodedHash := base64.RawURLEncoding.EncodeToString(hash[:])
+	return encodedHash
 }

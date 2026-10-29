@@ -99,28 +99,44 @@ func (r *repository) GetUnitsByGroup(
 	groupID string,
 	sotID string,
 ) ([]contract.AccessUnitWithUserCount, error) {
-	var units []contract.AccessUnitWithUserCount
+	var accessUnits []entity.AccessUnit
 
 	err := r.db.
-		Table("access_units AS au").
-		Select(`
-			au.*,
-			COUNT(u.access_unit_id) AS user_count
-		`).
-		Joins(`
-			LEFT JOIN users u
-				ON u.access_unit_id = au.id
-		`).
+		Preload("Users").
 		Where(
-			"au.group_id = ? AND au.sot_id = ?",
+			"group_id = ? AND sot_id = ?",
 			groupID,
 			sotID,
 		).
-		Group("au.id").
-		Find(&units).
-		Error
+		Find(&accessUnits).Error
 	if err != nil {
 		return nil, err
+	}
+
+	units := make(
+		[]contract.AccessUnitWithUserCount,
+		0,
+		len(accessUnits),
+	)
+
+	for _, au := range accessUnits {
+		unit := contract.AccessUnitWithUserCount{
+			AccessUnit: au,
+			UserCount:  int64(len(au.Users)),
+		}
+
+		for _, user := range au.Users {
+			switch user.Status {
+			case entity.UserStatusPending:
+				unit.PendingCount++
+			case entity.UserStatusApproved:
+				unit.ApprovedCount++
+			case entity.UserStatusRevoked:
+				unit.RevokedCount++
+			}
+		}
+
+		units = append(units, unit)
 	}
 
 	return units, nil

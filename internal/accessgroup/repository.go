@@ -16,12 +16,6 @@ func NewRepository(db *gorm.DB) *repository {
 	}
 }
 
-func (r *repository) Transaction(
-	fn func(tx *gorm.DB) error,
-) error {
-	return r.db.Transaction(fn)
-}
-
 func (r *repository) CreateGroup(
 	tx *gorm.DB,
 	accessGroup *entity.AccessGroup,
@@ -85,20 +79,22 @@ func (r *repository) GetGroupByID(
 }
 
 type childRow struct {
-	SotID           string `gorm:"column:sot_id"`
-	ParentGroupID   string `gorm:"column:parent_group_id"`
-	ChildGroupID    string `gorm:"column:child_group_id"`
-	WrappedChildKey string `gorm:"column:wrapped_child_key"`
-	ChildName       string `gorm:"column:child_name"`
-	ChildPublicKey  string `gorm:"column:child_public_key"`
-	AccessUnitCount int64  `gorm:"column:access_unit_count"`
-	UserCount       int64  `gorm:"column:user_count"`
+	SotID            string `gorm:"column:sot_id"`
+	ParentGroupID    string `gorm:"column:parent_group_id"`
+	ChildGroupID     string `gorm:"column:child_group_id"`
+	WrappedChildKey  string `gorm:"column:wrapped_child_key"`
+	ChildName        string `gorm:"column:child_name"`
+	ChildPublicKey   string `gorm:"column:child_public_key"`
+	AccessUnitCount  int64  `gorm:"column:access_unit_count"`
+	UserCount        int64  `gorm:"column:user_count"`
+	PendingUserCount int64  `gorm:"column:pending_user_count"`
 }
 
 type groupCountRow struct {
-	GroupID         string `gorm:"column:group_id"`
-	AccessUnitCount int64  `gorm:"column:access_unit_count"`
-	UserCount       int64  `gorm:"column:user_count"`
+	GroupID          string `gorm:"column:group_id"`
+	AccessUnitCount  int64  `gorm:"column:access_unit_count"`
+	UserCount        int64  `gorm:"column:user_count"`
+	PendingUserCount int64  `gorm:"column:pending_user_count"`
 }
 
 func (r *repository) GetGroupWithChildren(
@@ -108,7 +104,7 @@ func (r *repository) GetGroupWithChildren(
 ) ([]contract.AccessGroupTree, error) {
 	var groups []entity.AccessGroup
 
-	// Query 1: ambil group yang diminta atau semua root group.
+	// Query 1: Fetch the requested group or all root groups.
 	query := tx.Model(&entity.AccessGroup{}).
 		Where("sot_id = ?", sotID)
 
@@ -138,7 +134,7 @@ func (r *repository) GetGroupWithChildren(
 		groupIDs = append(groupIDs, group.ID)
 	}
 
-	// Siapkan response parent.
+	// Initialize the parent group response.
 	result := make([]contract.AccessGroupTree, 0, len(groups))
 	groupIndex := make(map[string]int, len(groups))
 
@@ -151,19 +147,29 @@ func (r *repository) GetGroupWithChildren(
 		})
 	}
 
-	// Query 2a: hitung AccessUnit/user untuk semua parent sekaligus.
-	// Diasumsikan satu AccessUnit merepresentasikan satu user.
+	// Query 2a: Count access units, all users, and pending users for each parent group.
 	var parentCounts []groupCountRow
 
 	err := tx.
-		Table("access_units").
+		Table("access_units AS au").
 		Select(`
-			group_id,
-			COUNT(*) AS access_unit_count,
-			COUNT(*) AS user_count
+			au.group_id,
+			COUNT(DISTINCT au.id) AS access_unit_count,
+			COUNT(DISTINCT u.id) AS user_count,
+			COUNT(DISTINCT CASE
+				WHEN u.status = 'pending' THEN u.id
+			END) AS pending_user_count
 		`).
-		Where("sot_id = ? AND group_id IN ?", sotID, groupIDs).
-		Group("group_id").
+		Joins(`
+			LEFT JOIN users u
+				ON u.access_unit_id = au.id
+		`).
+		Where(
+			"au.sot_id = ? AND au.group_id IN ?",
+			sotID,
+			groupIDs,
+		).
+		Group("au.group_id").
 		Scan(&parentCounts).Error
 	if err != nil {
 		return nil, err
@@ -173,10 +179,11 @@ func (r *repository) GetGroupWithChildren(
 		if index, ok := groupIndex[count.GroupID]; ok {
 			result[index].AccessUnitCount = count.AccessUnitCount
 			result[index].UserCount = count.UserCount
+			result[index].PendingUserCount = count.PendingUserCount
 		}
 	}
 
-	// Query 2b: ambil semua child beserta jumlah AccessUnit/user.
+	// Query 2b: Fetch child groups and count their access units, users, and pending users.
 	var children []childRow
 
 	err = tx.
@@ -188,8 +195,11 @@ func (r *repository) GetGroupWithChildren(
 			h.wrapped_child_key,
 			g.name AS child_name,
 			g.public_key AS child_public_key,
-			COUNT(au.group_id) AS access_unit_count,
-			COUNT(au.group_id) AS user_count
+			COUNT(DISTINCT au.id) AS access_unit_count,
+			COUNT(DISTINCT u.id) AS user_count,
+			COUNT(DISTINCT CASE
+				WHEN u.status = 'pending' THEN u.id
+			END) AS pending_user_count
 		`).
 		Joins(`
 			JOIN access_groups g
@@ -200,6 +210,10 @@ func (r *repository) GetGroupWithChildren(
 			LEFT JOIN access_units au
 				ON au.group_id = h.child_group_id
 				AND au.sot_id = h.sot_id
+		`).
+		Joins(`
+			LEFT JOIN users u
+				ON u.access_unit_id = au.id
 		`).
 		Where(
 			"h.sot_id = ? AND h.parent_group_id IN ?",
@@ -219,7 +233,7 @@ func (r *repository) GetGroupWithChildren(
 		return nil, err
 	}
 
-	// Masukkan child ke parent yang sesuai.
+	// Attach each child group to its corresponding parent.
 	for _, child := range children {
 		index, ok := groupIndex[child.ParentGroupID]
 		if !ok {
@@ -245,6 +259,7 @@ func (r *repository) GetGroupWithChildren(
 				AccessGroupHierarchy: hierarchy,
 				AccessUnitCount:      child.AccessUnitCount,
 				UserCount:            child.UserCount,
+				PendingUserCount:     child.PendingUserCount,
 			},
 		)
 	}

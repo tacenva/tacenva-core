@@ -51,6 +51,9 @@ func (s *Service) Enroll(
 		accessUnit.ID,
 		userStatus,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	response := contract.EnrollResponse{
 		SotHostname: s.sotHostname,

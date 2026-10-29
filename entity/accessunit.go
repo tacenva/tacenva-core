@@ -36,6 +36,10 @@ func (l AccessLevel) IsValid() bool {
 	}
 }
 
+func (l AccessLevel) IsAdmin() bool {
+	return l == LevelAdmin
+}
+
 func (u *AccessUnit) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {
 		u.ID = ulid.Make().String()

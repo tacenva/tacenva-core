@@ -2,7 +2,9 @@ package accessunit
 
 import (
 	"github.com/tacenva/tacenva-core/contract"
+	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +25,14 @@ func (s *Service) CreateUnitByTx(
 	wrappedGroupKey string,
 ) error {
 	if accessUnit == nil {
-		// return
+		return genericerror.ErrEmptyValue
+	}
+
+	debug.LogJSON("access unit:", accessUnit)
+
+	if accessUnit.Name == "" || accessUnit.GroupID == "" || accessUnit.SotID == "" ||
+		accessUnit.Level == "" || accessUnit.PublicKey == "" {
+		return genericerror.ErrEmptyValue
 	}
 
 	// if accessUnit.GroupID != authorizerGroupID {
@@ -102,7 +111,7 @@ func (s *Service) UpdateUnit(
 	accessUnit *entity.AccessUnit,
 ) error {
 	if accessUnit == nil {
-		// return
+		return genericerror.ErrEmptyValue
 	}
 
 	db := s.repository.db
@@ -113,7 +122,7 @@ func (s *Service) UpdateUnit(
 		}
 
 		if accessUnit.PublicKey != current.PublicKey && accessUnit.Revoked != current.Revoked {
-			// return
+			return genericerror.ErrImutableField
 		}
 		accessUnit.Revoked = current.Revoked
 		err = s.repository.UpdateUnit(tx, accessUnit)

@@ -1,6 +1,8 @@
 package accesscontrol
 
 import (
+	"errors"
+
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/internal/accessgroup"
@@ -43,7 +45,7 @@ func (s *Service) CreateGroup(
 	wrappedHierarchyKey string, // optional
 ) error {
 	if parentGroupID == "" {
-		// return
+		return errors.New("No selected parent group")
 	}
 
 	return s.accessgroupService.CreateGroup(
