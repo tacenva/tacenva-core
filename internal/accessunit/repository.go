@@ -142,6 +142,21 @@ func (r *repository) GetUnitsByGroup(
 	return units, nil
 }
 
+func (r *repository) FindAll(
+	sotID string,
+) ([]entity.AccessUnit, error) {
+	var result []entity.AccessUnit
+
+	err := r.db.
+		Where("sot_id = ?", sotID).
+		Find(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (r *repository) GetUsersByUnit(
 	unitID string,
 	sotID string,
@@ -165,17 +180,45 @@ func (r *repository) GetUsersByUnit(
 	return users, nil
 }
 
-func (r *repository) FindAll(
-	sotID string,
-) ([]entity.AccessUnit, error) {
-	var result []entity.AccessUnit
-
-	err := r.db.
-		Where("sot_id = ?", sotID).
-		Find(&result).Error
-	if err != nil {
-		return nil, err
+func (r *repository) SetApprovalUser(
+	userID string,
+	isRevoked bool,
+) error {
+	status := entity.UserStatusApproved
+	if isRevoked {
+		status = entity.UserStatusRevoked
 	}
 
-	return result, nil
+	result := r.db.
+		Model(&entity.User{}).
+		Where("id = ?", userID).
+		Update("status", status)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (r *repository) DeleteUser(
+	userID string,
+) error {
+	result := r.db.
+		Where("id = ?", userID).
+		Delete(&entity.User{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"github.com/tacenva/tacenva-core/internal/accessgroup"
 	"github.com/tacenva/tacenva-core/internal/accessunit"
 	"github.com/tacenva/tacenva-core/internal/user"
@@ -38,24 +39,19 @@ func NewService(
 
 func (s *Service) CreateGroup(
 	authorizer *entity.User,
-	accessGroup *entity.AccessGroup,
-	adminUnit *entity.AccessUnit,
-	parentGroupID string,
-	wrappedGroupKey string,
-	wrappedHierarchyKey string, // optional
+	accessGroupReq *contract.AccessGroupSetupRequest,
 ) error {
-	if parentGroupID == "" {
+	if accessGroupReq == nil {
+		return genericerror.ErrEmptyValue
+	}
+	if accessGroupReq.ParentGroupID == "" {
 		return errors.New("No selected parent group")
 	}
 
 	return s.accessgroupService.CreateGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
-		accessGroup,
-		adminUnit,
-		parentGroupID,
-		wrappedGroupKey,
-		wrappedHierarchyKey,
+		accessGroupReq,
 	)
 }
 
@@ -119,13 +115,11 @@ func (s *Service) SyncGroups(
 
 func (s *Service) CreateUnit(
 	sotID string,
-	accessUnit *entity.AccessUnit,
-	wrappedGroupKey string,
+	accessUnitReq *contract.AccessUnitSetupReq,
 ) error {
 	return s.accessunitService.CreateUnit(
 		sotID,
-		accessUnit,
-		wrappedGroupKey,
+		accessUnitReq,
 	)
 }
 
@@ -161,9 +155,39 @@ func (s *Service) SetRevokeUnit(
 	)
 }
 
+func (s *Service) SetRevokeStatus(
+	sotID string,
+	unitID string,
+	isRevoked bool,
+) error {
+	return s.accessunitService.SetRevokeUnit(
+		sotID,
+		unitID,
+		isRevoked,
+	)
+}
+
 func (s *Service) UnitList(
 	sotID string,
 	groupID string,
 ) ([]contract.AccessUnitWithUserCount, error) {
 	return s.accessunitService.UnitsByGroup(sotID, groupID)
+}
+
+func (s *Service) SetApprovalUser(
+	userID string,
+	isRevoked bool,
+) error {
+	return s.accessunitService.SetApprovalUser(
+		userID,
+		isRevoked,
+	)
+}
+
+func (s *Service) DeleteUser(
+	userID string,
+) error {
+	return s.accessunitService.DeleteUser(
+		userID,
+	)
 }

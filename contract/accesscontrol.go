@@ -28,3 +28,19 @@ type AccessUnitWithUserCount struct {
 	ApprovedCount int64 `json:"approved_count" gorm:"-"`
 	RevokedCount  int64 `json:"revoked_count" gorm:"-"`
 }
+
+type AccessGroupSetupRequest struct {
+	AccessGroup         *entity.AccessGroup `json:"access_group"`
+	AdminUnit           *entity.AccessUnit  `json:"admin_unit"`
+	ParentGroupID       string              `json:"parent_group_id,omitempty"`
+	WrappedGroupKey     string              `json:"wrapped_group_key"`
+	WrappedHierarchyKey string              `json:"wrapped_hierarchy_key,omitempty"`
+}
+
+type AccessUnitSetupReq struct {
+	AccessUnit      *entity.AccessUnit `json:"access_unit"`
+	WrappedGroupKey string             `json:"wrapped_group_key"`
+}
+type RevokeStatusReq struct {
+	IsRevoked bool `json:"is_revoked"`
+}

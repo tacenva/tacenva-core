@@ -37,34 +37,30 @@ func NewService(
 func (s *Service) CreateGroup(
 	sotID string,
 	authorizerGroupID string,
-	accessGroup *entity.AccessGroup,
-	adminUnit *entity.AccessUnit,
-	parentGroupID string, // optional
-	wrappedGroupKey string,
-	wrappedHierarchyKey string, // optional
+	accessGroupRequest *contract.AccessGroupSetupRequest,
 ) error {
-	if adminUnit == nil || accessGroup == nil {
+	if accessGroupRequest.AdminUnit == nil || accessGroupRequest.AccessGroup == nil {
 		return errAccessAssigned
 	}
 
 	return s.repository.db.Transaction(func(tx *gorm.DB) error {
 		// 1: create group first
-		accessGroup.SotID = sotID
-		err := s.repository.CreateGroup(tx, accessGroup)
+		accessGroupRequest.AccessGroup.SotID = sotID
+		err := s.repository.CreateGroup(tx, accessGroupRequest.AccessGroup)
 		if err != nil {
 			return err
 		}
 
 		// 2: create hierarchy
-		if parentGroupID != "" {
+		if accessGroupRequest.ParentGroupID != "" {
 			accessGroupHierarchy := entity.AccessGroupHierarchy{
 				SotID:         sotID,
-				ParentGroupID: parentGroupID,
-				ChildGroupID:  accessGroup.ID,
+				ParentGroupID: accessGroupRequest.ParentGroupID,
+				ChildGroupID:  accessGroupRequest.AccessGroup.ID,
 			}
 
-			if wrappedHierarchyKey != "" { // parent can access child
-				accessGroupHierarchy.WrappedChildKey = wrappedHierarchyKey
+			if accessGroupRequest.WrappedHierarchyKey != "" { // parent can access child
+				accessGroupHierarchy.WrappedChildKey = accessGroupRequest.WrappedHierarchyKey
 			}
 
 			err = s.repository.CreateGroupHierarchy(tx, &accessGroupHierarchy)
@@ -74,13 +70,13 @@ func (s *Service) CreateGroup(
 		}
 
 		// 3: create admin (unit & groupkey)
-		adminUnit.GroupID = accessGroup.ID
-		adminUnit.Level = entity.LevelAdmin
+		accessGroupRequest.AdminUnit.GroupID = accessGroupRequest.AccessGroup.ID
+		accessGroupRequest.AdminUnit.Level = entity.LevelAdmin
 		err = s.createUnit(
 			tx,
 			sotID,
-			adminUnit,
-			wrappedGroupKey,
+			accessGroupRequest.AdminUnit,
+			accessGroupRequest.WrappedGroupKey,
 		)
 		if err != nil {
 			return err

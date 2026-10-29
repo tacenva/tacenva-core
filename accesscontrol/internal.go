@@ -1,6 +1,7 @@
 package accesscontrol
 
 import (
+	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/internal/accessgroup"
 	"github.com/tacenva/tacenva-core/internal/accessunit"
@@ -63,11 +64,11 @@ func (s *Internal) InitAccess(
 	err = s.accessgroupService.CreateGroup(
 		sotID,
 		"",
-		&accessGroup,
-		&adminUnit,
-		"",
-		wrappedGroupKey,
-		"",
+		&contract.AccessGroupSetupRequest{
+			AccessGroup:     &accessGroup,
+			AdminUnit:       &adminUnit,
+			WrappedGroupKey: wrappedGroupKey,
+		},
 	)
 	if err != nil {
 		return nil, nil, err

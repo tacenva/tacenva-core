@@ -122,7 +122,6 @@ func (s *Service) GetAuthDataWithGroupList(
 
 	if userData.AccessUnit.Revoked {
 		authData.Status = entity.UserStatusRevoked
-		// return &authData, permission.ErrRevoked
 	}
 
 	var groups []entity.AccessGroup

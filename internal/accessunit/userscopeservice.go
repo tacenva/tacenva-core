@@ -16,3 +16,31 @@ func (s *Service) UsersByUnit(
 
 	return result, nil
 }
+
+func (s *Service) SetApprovalUser(
+	userID string,
+	isRevoked bool,
+) error {
+	err := s.repository.SetApprovalUser(
+		userID,
+		isRevoked,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) DeleteUser(
+	userID string,
+) error {
+	err := s.repository.DeleteUser(
+		userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

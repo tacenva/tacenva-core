@@ -64,14 +64,13 @@ func (s *Service) CreateUnitByTx(
 
 func (s *Service) CreateUnit(
 	sotID string,
-	accessUnit *entity.AccessUnit,
-	wrappedGroupKey string,
+	accessUnitReq *contract.AccessUnitSetupReq,
 ) error {
 	return s.CreateUnitByTx(
 		s.repository.db,
 		sotID,
-		accessUnit,
-		wrappedGroupKey,
+		accessUnitReq.AccessUnit,
+		accessUnitReq.WrappedGroupKey,
 	)
 }
 
