@@ -26,20 +26,15 @@ type User struct {
 }
 
 func (u *User) HasWriteAccess() bool {
-	switch u.AccessUnit.Level {
-	case LevelAdmin, LevelWrite:
-		return true
-	default:
-		return false
-	}
+	return u.AccessUnit.HasWriteAccess()
 }
 
 func (u *User) HasAdminAccess() bool {
-	return u.AccessUnit.Level == LevelAdmin
+	return u.AccessUnit.HasAdminAccess()
 }
 
 func (u *User) IsApproved() bool {
-	return u.Status == UserStatusApproved
+	return u.AccessUnit.IsAllowed() && u.Status == UserStatusApproved
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {

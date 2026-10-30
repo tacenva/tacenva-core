@@ -334,7 +334,6 @@ func (r *repository) UpdateGroupsBulk(
 			Where("id = ? AND sot_id = ?", group.ID, sotID).
 			Updates(map[string]interface{}{
 				"name": group.Name,
-				// "public_key": group.PublicKey,
 			}).Error
 		if err != nil {
 			return err
@@ -356,4 +355,97 @@ func (r *repository) DeleteGroupsBulk(
 	return tx.
 		Where("sot_id = ? AND id IN ?", sotID, groupIDs).
 		Delete(&entity.AccessGroup{}).Error
+}
+
+func (r *repository) CanAccessGroup(
+	sotID string,
+	parentGroupID string,
+	childGroupID string,
+) (bool, error) {
+	var count int64
+
+	err := r.db.Raw(`
+		WITH RECURSIVE group_path(group_id) AS (
+			SELECT ?
+
+			UNION
+
+			SELECT
+				CASE
+					WHEN h.parent_group_id = gp.group_id
+					THEN h.child_group_id
+					ELSE h.parent_group_id
+				END
+			FROM access_group_hierarchies h
+			JOIN group_path gp
+				ON h.parent_group_id = gp.group_id
+				OR h.child_group_id = gp.group_id
+			WHERE
+				h.sot_id = ?
+				AND h.wrapped_child_key IS NOT NULL
+				AND TRIM(h.wrapped_child_key) != ''
+		)
+		SELECT COUNT(*)
+		FROM group_path
+		WHERE group_id = ?
+	`, parentGroupID, sotID, childGroupID).
+		Scan(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+func (r *repository) GetGroupByUnitID(
+	sotID string,
+	unitID string,
+) (*entity.AccessGroup, error) {
+	var group entity.AccessGroup
+
+	err := r.db.
+		Joins("JOIN access_units ON access_units.group_id = access_groups.id AND access_units.sot_id = access_groups.sot_id").
+		Where(
+			"access_units.id = ? AND access_groups.sot_id = ?",
+			unitID,
+			sotID,
+		).
+		First(&group).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
+func (r *repository) GetGroupByUserID(
+	sotID string,
+	userID string,
+) (*entity.AccessGroup, error) {
+	var group entity.AccessGroup
+
+	err := r.db.
+		Joins(`
+			JOIN access_units
+				ON access_units.group_id = access_groups.id
+				AND access_units.sot_id = access_groups.sot_id
+		`).
+		Joins(`
+			JOIN users
+				ON users.access_unit_id = access_units.id
+		`).
+		Where(
+			"users.id = ? AND access_groups.sot_id = ?",
+			userID,
+			sotID,
+		).
+		First(&group).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
 }

@@ -107,33 +107,29 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 }
 
 func (s *Service) GetAuthDataWithGroupList(
-	token string,
+	authorizedUser *entity.User,
 	sotID string,
 ) (*contract.AuthData, error) {
-	userData, err := s.userService.GetByToken(token)
-	if err != nil {
-		return nil, err
-	}
-
 	authData := contract.AuthData{
-		Status:      userData.Status,
-		AccessLevel: userData.AccessUnit.Level,
+		Status:      authorizedUser.Status,
+		AccessLevel: authorizedUser.AccessUnit.Level,
 	}
 
-	if userData.AccessUnit.Revoked {
+	if authorizedUser.AccessUnit.Revoked {
 		authData.Status = entity.UserStatusRevoked
 	}
 
 	var groups []entity.AccessGroup
-	// if userData.HasWritePermission() {
-	groups, err = s.accessgroupService.List(sotID)
-	if err != nil {
-		return nil, err
+	if authorizedUser.HasWriteAccess() {
+		var err error
+		groups, err = s.accessgroupService.List(sotID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	// }
 
 	authData.GroupAssignment = &contract.GroupAssignment{
-		ID:    userData.AccessUnit.GroupID,
+		ID:    authorizedUser.AccessUnit.GroupID,
 		Items: groups,
 	}
 

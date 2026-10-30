@@ -2,8 +2,10 @@ package accessgroup
 
 import (
 	"errors"
+	"log"
 
 	"github.com/tacenva/tacenva-core/contract"
+	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
@@ -39,6 +41,7 @@ func (s *Service) CreateGroup(
 	authorizerGroupID string,
 	accessGroupRequest *contract.AccessGroupSetupRequest,
 ) error {
+	debug.LogJSON("access group", accessGroupRequest)
 	if accessGroupRequest.AdminUnit == nil || accessGroupRequest.AccessGroup == nil {
 		return errAccessAssigned
 	}
@@ -48,6 +51,7 @@ func (s *Service) CreateGroup(
 		accessGroupRequest.AccessGroup.SotID = sotID
 		err := s.repository.CreateGroup(tx, accessGroupRequest.AccessGroup)
 		if err != nil {
+			log.Printf("err: %s\n", err)
 			return err
 		}
 
@@ -65,6 +69,7 @@ func (s *Service) CreateGroup(
 
 			err = s.repository.CreateGroupHierarchy(tx, &accessGroupHierarchy)
 			if err != nil {
+				log.Printf("err: %s\n", err)
 				return err
 			}
 		}
@@ -79,6 +84,7 @@ func (s *Service) CreateGroup(
 			accessGroupRequest.WrappedGroupKey,
 		)
 		if err != nil {
+			log.Printf("err: %s\n", err)
 			return err
 		}
 
@@ -101,11 +107,12 @@ func (s *Service) UpdateGroup(
 			return err
 		}
 
-		if accessGroup.PublicKey != current.PublicKey {
+		if accessGroup.PublicKey != "" && accessGroup.PublicKey != current.PublicKey {
 			return genericerror.ErrImutableField
 		}
 
-		err = s.repository.UpdateGroup(tx, accessGroup)
+		current.Name = accessGroup.Name
+		err = s.repository.UpdateGroup(tx, current)
 		return err
 	})
 }
@@ -207,8 +214,8 @@ func (s *Service) SyncGroups(
 		if group.Name == "" {
 			return errors.New("group name cannot be empty")
 		}
-		if group.PublicKey == "" {
-			return errors.New("group public key cannot be empty")
+		if group.PublicKey != "" {
+			return errors.New("group public key must be empty")
 		}
 		if _, exists := incoming[group.ID]; exists {
 			return errors.New("duplicate group ID: " + group.ID)
@@ -265,4 +272,58 @@ func (s *Service) SyncGroups(
 
 		return nil
 	})
+}
+
+func (s *Service) CanAccessGroup(
+	sotID string,
+	parentGroupID string,
+	childGroupID string,
+) (bool, error) {
+	if sotID == "" || parentGroupID == "" || childGroupID == "" {
+		return false, errors.New("sot id and group ids are required")
+	}
+
+	if parentGroupID == childGroupID {
+		return true, nil
+	}
+
+	return s.repository.CanAccessGroup(
+		sotID,
+		parentGroupID,
+		childGroupID,
+	)
+}
+
+func (s *Service) GetGroupByUnitID(
+	sotID string,
+	unitID string,
+) (*entity.AccessGroup, error) {
+	return s.repository.GetGroupByUnitID(sotID, unitID)
+}
+
+func (s *Service) GetGroupByID(
+	sotID string,
+	groupID string,
+) (*entity.AccessGroup, error) {
+	var group *entity.AccessGroup
+	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
+		found, err := s.repository.GetGroupByID(tx, groupID, sotID)
+		if err != nil {
+			return err
+		}
+		group = found
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return group, nil
+}
+
+func (s *Service) GetGroupByUserID(
+	sotID string,
+	userID string,
+) (*entity.AccessGroup, error) {
+	return s.repository.GetGroupByUserID(sotID, userID)
 }

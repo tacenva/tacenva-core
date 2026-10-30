@@ -2,7 +2,6 @@ package accessunit
 
 import (
 	"github.com/tacenva/tacenva-core/contract"
-	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
@@ -28,9 +27,7 @@ func (s *Service) CreateUnitByTx(
 		return genericerror.ErrEmptyValue
 	}
 
-	debug.LogJSON("access unit:", accessUnit)
-
-	if accessUnit.Name == "" || accessUnit.GroupID == "" || accessUnit.SotID == "" ||
+	if accessUnit.Name == "" || accessUnit.GroupID == "" ||
 		accessUnit.Level == "" || accessUnit.PublicKey == "" {
 		return genericerror.ErrEmptyValue
 	}

@@ -36,13 +36,26 @@ func (l AccessLevel) IsValid() bool {
 	}
 }
 
-func (l AccessLevel) IsAdmin() bool {
-	return l == LevelAdmin
+func (au *AccessUnit) HasWriteAccess() bool {
+	switch au.Level {
+	case LevelAdmin, LevelWrite:
+		return true
+	default:
+		return false
+	}
 }
 
-func (u *AccessUnit) BeforeCreate(tx *gorm.DB) error {
-	if u.ID == "" {
-		u.ID = ulid.Make().String()
+func (au *AccessUnit) HasAdminAccess() bool {
+	return au.Level == LevelAdmin
+}
+
+func (au *AccessUnit) IsAllowed() bool {
+	return !au.Revoked
+}
+
+func (au *AccessUnit) BeforeCreate(tx *gorm.DB) error {
+	if au.ID == "" {
+		au.ID = ulid.Make().String()
 	}
 	return nil
 }
