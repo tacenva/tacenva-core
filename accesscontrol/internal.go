@@ -64,6 +64,7 @@ func (s *Internal) InitAccess(
 	err = s.accessgroupService.CreateGroup(
 		sotID,
 		"",
+		"internal",
 		&contract.AccessGroupSetupRequest{
 			AccessGroup:     &accessGroup,
 			AdminUnit:       &adminUnit,

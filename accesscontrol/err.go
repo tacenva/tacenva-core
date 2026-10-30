@@ -37,7 +37,7 @@ func (s *Service) verifyGroupAccess(
 	}
 
 	if selfAccessdenied {
-		if parentGroupID == authorizer.AccessUnit.GroupID {
+		if childGroupID == authorizer.AccessUnit.GroupID {
 			return errSelfAccessDenied
 		}
 	}

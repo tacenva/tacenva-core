@@ -109,8 +109,9 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 func (s *Service) GetAuthDataWithGroupList(
 	authorizedUser *entity.User,
 	sotID string,
-) (*contract.AuthData, error) {
-	authData := contract.AuthData{
+	accessGroupLastChangeID string,
+) (*contract.AuthDataResp, error) {
+	authData := contract.AuthDataResp{
 		Status:      authorizedUser.Status,
 		AccessLevel: authorizedUser.AccessUnit.Level,
 	}
@@ -119,18 +120,24 @@ func (s *Service) GetAuthDataWithGroupList(
 		authData.Status = entity.UserStatusRevoked
 	}
 
-	var groups []entity.AccessGroup
+	var (
+		groups       []entity.AccessGroup
+		lastChangeID string
+	)
 	if authorizedUser.HasWriteAccess() {
 		var err error
 		groups, err = s.accessgroupService.List(sotID)
 		if err != nil {
 			return nil, err
 		}
+
+		lastChangeID, err = s.accessgroupService.GetLastChangeID(sotID)
 	}
 
 	authData.GroupAssignment = &contract.GroupAssignment{
-		ID:    authorizedUser.AccessUnit.GroupID,
-		Items: groups,
+		ID:           authorizedUser.AccessUnit.GroupID,
+		LastChangeID: lastChangeID,
+		Items:        groups,
 	}
 
 	return &authData, nil

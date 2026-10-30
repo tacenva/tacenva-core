@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/internal/user"
 	"gorm.io/gorm"
@@ -68,7 +67,8 @@ func (s *Service) RecordChange(
 	switch operation {
 	case entity.OperationCreate,
 		entity.OperationUpdate,
-		entity.OperationDelete:
+		entity.OperationDelete,
+		entity.OperationChange:
 	default:
 		return fmt.Errorf(
 			"invalid sync operation %q",
@@ -80,14 +80,32 @@ func (s *Service) RecordChange(
 		return fmt.Errorf("sync transaction is required")
 	}
 
-	unsynced := (*syncChangeID == "")
-	if unsynced {
-		*syncChangeID = ulid.Make().String()
+	setSyncStateToBeLastest := false
+	if syncChangeID != nil && *syncChangeID != "" {
+		setSyncStateToBeLastest = true
+
+		var count int64
+		if err := tx.Model(&entity.SyncChange{}).
+			Where("id = ? AND sot_id = ?", *syncChangeID, sotID).
+			Count(&count).Error; err != nil {
+			return fmt.Errorf("query sync change: %w", err)
+		}
+
+		if count == 0 {
+			return fmt.Errorf(
+				"sync change %q not found for SoT %q",
+				*syncChangeID,
+				sotID,
+			)
+		}
+	}
+
+	if syncChangeID == nil {
+		syncChangeID = new(string)
 	}
 
 	now := time.Now()
 	change := entity.SyncChange{
-		ID:        *syncChangeID,
 		Entity:    entityName,
 		EntityID:  entityID,
 		Operation: operation,
@@ -97,6 +115,10 @@ func (s *Service) RecordChange(
 		ChangedBy: changedBy,
 	}
 
+	if *syncChangeID != "" {
+		syncChangeID = &change.ID
+	}
+
 	if err := tx.Create(&change).Error; err != nil {
 		return fmt.Errorf(
 			"create sync change: %w",
@@ -104,7 +126,7 @@ func (s *Service) RecordChange(
 		)
 	}
 
-	if !unsynced {
+	if setSyncStateToBeLastest {
 		state := entity.SyncState{
 			SotID:        sotID,
 			Entity:       entityName,

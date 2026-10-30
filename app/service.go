@@ -26,6 +26,11 @@ func NewServices(
 		user.NewRepository(sqliteDB),
 	)
 
+	syncService := sync.NewService(
+		sqliteDB,
+		userService,
+	)
+
 	accessunitService := accessunit.NewService(
 		accessunit.NewRepository(sqliteDB),
 	)
@@ -33,11 +38,7 @@ func NewServices(
 	accessgroupService := accessgroup.NewService(
 		accessgroup.NewRepository(sqliteDB),
 		accessunitService.CreateUnitByTx,
-	)
-
-	syncService := sync.NewService(
-		sqliteDB,
-		userService,
+		syncService,
 	)
 
 	accessControlService := accesscontrol.NewService(

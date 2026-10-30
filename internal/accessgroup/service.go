@@ -2,12 +2,12 @@ package accessgroup
 
 import (
 	"errors"
-	"log"
 
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/genericerror"
+	"github.com/tacenva/tacenva-core/sync"
 	"gorm.io/gorm"
 )
 
@@ -19,6 +19,9 @@ type Service struct {
 		accessUnit *entity.AccessUnit,
 		wrappedGroupKey string,
 	) error
+
+	syncService    *sync.Service
+	syncentityname string
 }
 
 func NewService(
@@ -29,16 +32,34 @@ func NewService(
 		accessUnit *entity.AccessUnit,
 		wrappedGroupKey string,
 	) error,
+	syncService *sync.Service,
 ) *Service {
 	return &Service{
-		repository: repository,
-		createUnit: createUnit,
+		repository:     repository,
+		createUnit:     createUnit,
+		syncService:    syncService,
+		syncentityname: "access_group",
 	}
+}
+
+func (s *Service) GetLastChangeID(
+	sotID string,
+) (string, error) {
+	syncState, err := s.syncService.GetSyncState(
+		sotID,
+		s.syncentityname,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return syncState.LastChangeID, nil
 }
 
 func (s *Service) CreateGroup(
 	sotID string,
 	authorizerGroupID string,
+	changeBy string,
 	accessGroupRequest *contract.AccessGroupSetupRequest,
 ) error {
 	debug.LogJSON("access group", accessGroupRequest)
@@ -51,7 +72,6 @@ func (s *Service) CreateGroup(
 		accessGroupRequest.AccessGroup.SotID = sotID
 		err := s.repository.CreateGroup(tx, accessGroupRequest.AccessGroup)
 		if err != nil {
-			log.Printf("err: %s\n", err)
 			return err
 		}
 
@@ -69,7 +89,6 @@ func (s *Service) CreateGroup(
 
 			err = s.repository.CreateGroupHierarchy(tx, &accessGroupHierarchy)
 			if err != nil {
-				log.Printf("err: %s\n", err)
 				return err
 			}
 		}
@@ -84,7 +103,29 @@ func (s *Service) CreateGroup(
 			accessGroupRequest.WrappedGroupKey,
 		)
 		if err != nil {
-			log.Printf("err: %s\n", err)
+			return err
+		}
+
+		// record change
+		err = s.syncService.RecordChange(
+			tx,
+			nil,
+			s.syncentityname,
+			accessGroupRequest.AccessGroup.ID,
+			entity.OperationChange,
+			sotID,
+			changeBy,
+		)
+		if err != nil {
+			return err
+		}
+
+		err = s.syncService.SetSyncStateToBeLastest(
+			tx,
+			sotID,
+			s.syncentityname,
+		)
+		if err != nil {
 			return err
 		}
 
@@ -95,6 +136,7 @@ func (s *Service) CreateGroup(
 func (s *Service) UpdateGroup(
 	sotID string,
 	authorizerGroupID string,
+	changeBy string,
 	accessGroup *entity.AccessGroup,
 ) error {
 	if accessGroup == nil {
@@ -113,17 +155,73 @@ func (s *Service) UpdateGroup(
 
 		current.Name = accessGroup.Name
 		err = s.repository.UpdateGroup(tx, current)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// record change
+		err = s.syncService.RecordChange(
+			tx,
+			nil,
+			s.syncentityname,
+			current.ID,
+			entity.OperationChange,
+			sotID,
+			changeBy,
+		)
+		if err != nil {
+			return err
+		}
+
+		err = s.syncService.SetSyncStateToBeLastest(
+			tx,
+			sotID,
+			s.syncentityname,
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 
 func (s *Service) DeleteGroup(
 	sotID string,
 	authorizerGroupID string,
+	changeBy string,
 	id string,
 ) error {
 	return s.repository.db.Transaction(func(tx *gorm.DB) error {
-		return s.repository.DeleteGroup(tx, id, sotID)
+		err := s.repository.DeleteGroup(tx, id, sotID)
+		if err != nil {
+			return err
+		}
+
+		// record change
+		err = s.syncService.RecordChange(
+			tx,
+			nil,
+			s.syncentityname,
+			id,
+			entity.OperationChange,
+			sotID,
+			changeBy,
+		)
+		if err != nil {
+			return err
+		}
+
+		err = s.syncService.SetSyncStateToBeLastest(
+			tx,
+			sotID,
+			s.syncentityname,
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 

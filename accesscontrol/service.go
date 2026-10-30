@@ -55,6 +55,7 @@ func (s *Service) CreateGroup(
 	return s.accessgroupService.CreateGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
 		accessGroupReq,
 	)
 }
@@ -75,6 +76,7 @@ func (s *Service) UpdateGroup(
 	return s.accessgroupService.UpdateGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
 		accessGroup,
 	)
 }
@@ -95,6 +97,7 @@ func (s *Service) DeleteGroup(
 	return s.accessgroupService.DeleteGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
 		id,
 	)
 }
@@ -168,7 +171,7 @@ func (s *Service) UpdateUnit(
 		accessUnit.ID,
 		false,
 	); err != nil {
-		return nil
+		return err
 	}
 	return s.accessunitService.UpdateUnit(
 		authorizer.AccessUnit.SotID,
@@ -185,7 +188,7 @@ func (s *Service) DeleteUnit(
 		unitID,
 		true,
 	); err != nil {
-		return nil
+		return err
 	}
 	return s.accessunitService.DeleteUnit(
 		authorizer.AccessUnit.SotID,
@@ -203,7 +206,7 @@ func (s *Service) SetRevokeUnit(
 		unitID,
 		true,
 	); err != nil {
-		return nil
+		return err
 	}
 	return s.accessunitService.SetRevokeUnit(
 		authorizer.AccessUnit.SotID,
@@ -231,7 +234,7 @@ func (s *Service) SetApprovalUser(
 		authorizer,
 		userID,
 	); err != nil {
-		return nil
+		return err
 	}
 	return s.accessunitService.SetApprovalUser(
 		userID,
@@ -247,7 +250,7 @@ func (s *Service) DeleteUser(
 		authorizer,
 		userID,
 	); err != nil {
-		return nil
+		return err
 	}
 	return s.accessunitService.DeleteUser(
 		userID,
