@@ -127,9 +127,8 @@ func (s *Service) PublicKeyOfGroups(
 	authorizer *entity.User,
 	groupIDS []string,
 ) (map[string]string, error) {
-	if authorizer.HasWriteAccess() {
-		return nil, errors.New("only users with write access are allowed to perform this action")
-
+	if err := verifyWriterAccess(authorizer); err != nil {
+		return nil, err
 	}
 	return s.accessgroupService.PublicKeyList(
 		authorizer.AccessUnit.SotID,

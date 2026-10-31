@@ -9,6 +9,7 @@ import (
 
 var (
 	errAdminOnly         = errors.New("only administrators are allowed to perform this action")
+	errWriterOnly        = errors.New("only users with write access are allowed to perform this action")
 	errGroupAccessDenied = errors.New("you do not have access to this group")
 	errSelfAccessDenied  = errors.New("you are not allowed to perform this action on your own resources")
 	errInvalidAuthorizer = genericerror.ErrEmptyValue
@@ -21,6 +22,18 @@ func verifyAdminAccess(authorizer *entity.User) error {
 
 	if !authorizer.HasAdminAccess() {
 		return errAdminOnly
+	}
+
+	return nil
+}
+
+func verifyWriterAccess(authorizer *entity.User) error {
+	if authorizer == nil {
+		return errInvalidAuthorizer
+	}
+
+	if !authorizer.HasWriteAccess() {
+		return errWriterOnly
 	}
 
 	return nil

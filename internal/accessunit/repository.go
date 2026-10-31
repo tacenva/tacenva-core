@@ -1,8 +1,6 @@
 package accessunit
 
 import (
-	"fmt"
-
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
 	"gorm.io/gorm"
@@ -201,11 +199,9 @@ func (r *repository) SetApprovalUser(
 	}
 
 	if result.RowsAffected == 0 {
-		fmt.Println("Disini 2")
 		return gorm.ErrRecordNotFound
 	}
 
-	fmt.Println("Disini 3")
 	return nil
 }
 
