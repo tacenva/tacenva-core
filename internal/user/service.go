@@ -31,11 +31,11 @@ func NewService(repository *repository) *Service {
 
 func (s *Service) Create(
 	hostname string,
-	permissionID string,
+	accessUnitID string,
 	userStatus entity.UserStatus,
 ) (*entity.User, string, error) {
 	hostname = strings.TrimSpace(hostname)
-	permissionID = strings.TrimSpace(permissionID)
+	accessUnitID = strings.TrimSpace(accessUnitID)
 
 	if hostname == "" {
 		return nil, "", ErrHostnameEmpty
@@ -47,7 +47,7 @@ func (s *Service) Create(
 	}
 
 	user := &entity.User{
-		PermissionID: permissionID,
+		AccessUnitID: accessUnitID,
 		Hostname:     hostname,
 		Token:        credential.Hash(token),
 		Status:       userStatus,

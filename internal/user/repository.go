@@ -23,7 +23,7 @@ func (r *repository) Create(user *entity.User) error {
 	}
 
 	return r.db.
-		Preload("Permission").
+		Preload("AccessUnit").
 		First(user, "id = ?", user.ID).Error
 }
 
@@ -50,7 +50,7 @@ func (r *repository) FindByToken(tokenHash string) (*entity.User, error) {
 	var user entity.User
 
 	err := r.db.
-		Preload("Permission").
+		Preload("AccessUnit").
 		Where("token = ?", tokenHash).
 		First(&user).
 		Error
@@ -86,10 +86,10 @@ func (r *repository) Update(user *entity.User) error {
 		Model(&entity.User{}).
 		Where("id = ?", user.ID).
 		Updates(map[string]any{
-			"permission_id": user.PermissionID,
-			"hostname":      user.Hostname,
-			"token":         user.Token,
-			"status":        user.Status,
+			"access_unit_id": user.AccessUnitID,
+			"hostname":       user.Hostname,
+			"token":          user.Token,
+			"status":         user.Status,
 		}).
 		Error
 }

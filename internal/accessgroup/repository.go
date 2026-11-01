@@ -1,0 +1,451 @@
+package accessgroup
+
+import (
+	"github.com/tacenva/tacenva-core/contract"
+	"github.com/tacenva/tacenva-core/entity"
+	"gorm.io/gorm"
+)
+
+type repository struct {
+	db *gorm.DB
+}
+
+func NewRepository(db *gorm.DB) *repository {
+	return &repository{
+		db: db,
+	}
+}
+
+func (r *repository) CreateGroup(
+	tx *gorm.DB,
+	accessGroup *entity.AccessGroup,
+) error {
+	return tx.Create(accessGroup).Error
+}
+
+func (r *repository) CreateGroupHierarchy(
+	tx *gorm.DB,
+	accessGroupHierarchy *entity.AccessGroupHierarchy,
+) error {
+	return tx.Create(accessGroupHierarchy).Error
+}
+
+func (r *repository) UpdateGroup(
+	tx *gorm.DB,
+	accessGroup *entity.AccessGroup,
+) error {
+	return tx.Model(&entity.AccessGroup{}).
+		Where("id = ? AND sot_id = ?", accessGroup.ID, accessGroup.SotID).
+		Select("Name").
+		Updates(accessGroup).Error
+}
+
+func (r *repository) DeleteGroup(
+	tx *gorm.DB,
+	id string,
+	sotID string,
+) error {
+	result := tx.
+		Where("id = ? AND sot_id = ?", id, sotID).
+		Delete(&entity.AccessGroup{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (r *repository) GetGroupByID(
+	tx *gorm.DB,
+	id string,
+	sotID string,
+) (*entity.AccessGroup, error) {
+	var accessGroup entity.AccessGroup
+
+	err := tx.
+		Where("id = ? AND sot_id = ?", id, sotID).
+		First(&accessGroup).
+		Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &accessGroup, nil
+}
+
+type childRow struct {
+	SotID            string `gorm:"column:sot_id"`
+	ParentGroupID    string `gorm:"column:parent_group_id"`
+	ChildGroupID     string `gorm:"column:child_group_id"`
+	WrappedChildKey  string `gorm:"column:wrapped_child_key"`
+	ChildName        string `gorm:"column:child_name"`
+	ChildPublicKey   string `gorm:"column:child_public_key"`
+	AccessUnitCount  int64  `gorm:"column:access_unit_count"`
+	UserCount        int64  `gorm:"column:user_count"`
+	PendingUserCount int64  `gorm:"column:pending_user_count"`
+}
+
+type groupCountRow struct {
+	GroupID          string `gorm:"column:group_id"`
+	AccessUnitCount  int64  `gorm:"column:access_unit_count"`
+	UserCount        int64  `gorm:"column:user_count"`
+	PendingUserCount int64  `gorm:"column:pending_user_count"`
+}
+
+func (r *repository) GetGroupWithChildren(
+	tx *gorm.DB,
+	id string,
+	sotID string,
+) ([]contract.AccessGroupTree, error) {
+	var groups []entity.AccessGroup
+
+	// Query 1: Fetch the requested group or all root groups.
+	query := tx.Model(&entity.AccessGroup{}).
+		Where("sot_id = ?", sotID)
+
+	if id != "" {
+		query = query.Where("id = ?", id)
+	} else {
+		query = query.Where(`
+			NOT EXISTS (
+				SELECT 1
+				FROM access_group_hierarchies h
+				WHERE h.sot_id = access_groups.sot_id
+				  AND h.child_group_id = access_groups.id
+			)
+		`)
+	}
+
+	if err := query.Find(&groups).Error; err != nil {
+		return nil, err
+	}
+
+	if len(groups) == 0 {
+		return []contract.AccessGroupTree{}, nil
+	}
+
+	groupIDs := make([]string, 0, len(groups))
+	for _, group := range groups {
+		groupIDs = append(groupIDs, group.ID)
+	}
+
+	// Initialize the parent group response.
+	result := make([]contract.AccessGroupTree, 0, len(groups))
+	groupIndex := make(map[string]int, len(groups))
+
+	for _, group := range groups {
+		groupIndex[group.ID] = len(result)
+
+		result = append(result, contract.AccessGroupTree{
+			Group:    group,
+			Children: []contract.AccessGroupHierarchyWithCount{},
+		})
+	}
+
+	// Query 2a: Count access units, all users, and pending users for each parent group.
+	var parentCounts []groupCountRow
+
+	err := tx.
+		Table("access_units AS au").
+		Select(`
+			au.group_id,
+			COUNT(DISTINCT au.id) AS access_unit_count,
+			COUNT(DISTINCT u.id) AS user_count,
+			COUNT(DISTINCT CASE
+				WHEN u.status = 'pending' THEN u.id
+			END) AS pending_user_count
+		`).
+		Joins(`
+			LEFT JOIN users u
+				ON u.access_unit_id = au.id
+		`).
+		Where(
+			"au.sot_id = ? AND au.group_id IN ?",
+			sotID,
+			groupIDs,
+		).
+		Group("au.group_id").
+		Scan(&parentCounts).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, count := range parentCounts {
+		if index, ok := groupIndex[count.GroupID]; ok {
+			result[index].AccessUnitCount = count.AccessUnitCount
+			result[index].UserCount = count.UserCount
+			result[index].PendingUserCount = count.PendingUserCount
+		}
+	}
+
+	// Query 2b: Fetch child groups and count their access units, users, and pending users.
+	var children []childRow
+
+	err = tx.
+		Table("access_group_hierarchies AS h").
+		Select(`
+			h.sot_id,
+			h.parent_group_id,
+			h.child_group_id,
+			h.wrapped_child_key,
+			g.name AS child_name,
+			g.public_key AS child_public_key,
+			COUNT(DISTINCT au.id) AS access_unit_count,
+			COUNT(DISTINCT u.id) AS user_count,
+			COUNT(DISTINCT CASE
+				WHEN u.status = 'pending' THEN u.id
+			END) AS pending_user_count
+		`).
+		Joins(`
+			JOIN access_groups g
+				ON g.id = h.child_group_id
+				AND g.sot_id = h.sot_id
+		`).
+		Joins(`
+			LEFT JOIN access_units au
+				ON au.group_id = h.child_group_id
+				AND au.sot_id = h.sot_id
+		`).
+		Joins(`
+			LEFT JOIN users u
+				ON u.access_unit_id = au.id
+		`).
+		Where(
+			"h.sot_id = ? AND h.parent_group_id IN ?",
+			sotID,
+			groupIDs,
+		).
+		Group(`
+			h.sot_id,
+			h.parent_group_id,
+			h.child_group_id,
+			h.wrapped_child_key,
+			g.name,
+			g.public_key
+		`).
+		Scan(&children).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Attach each child group to its corresponding parent.
+	for _, child := range children {
+		index, ok := groupIndex[child.ParentGroupID]
+		if !ok {
+			continue
+		}
+
+		hierarchy := entity.AccessGroupHierarchy{
+			SotID:           child.SotID,
+			ParentGroupID:   child.ParentGroupID,
+			ChildGroupID:    child.ChildGroupID,
+			WrappedChildKey: child.WrappedChildKey,
+			Child: entity.AccessGroup{
+				ID:        child.ChildGroupID,
+				SotID:     child.SotID,
+				Name:      child.ChildName,
+				PublicKey: child.ChildPublicKey,
+			},
+		}
+
+		result[index].Children = append(
+			result[index].Children,
+			contract.AccessGroupHierarchyWithCount{
+				AccessGroupHierarchy: hierarchy,
+				AccessUnitCount:      child.AccessUnitCount,
+				UserCount:            child.UserCount,
+				PendingUserCount:     child.PendingUserCount,
+			},
+		)
+	}
+
+	return result, nil
+}
+
+func (r *repository) FindAll(
+	tx *gorm.DB,
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+
+	err := tx.Model(&entity.AccessGroup{}).
+		Select("id", "name").
+		Where("sot_id = ?", sotID).
+		Order("name ASC").
+		Find(&groups).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return groups, nil
+}
+
+func (r *repository) FindKeysByIDs(
+	tx *gorm.DB,
+	sotID string,
+	groupIDs []string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+
+	if len(groupIDs) == 0 {
+		return groups, nil
+	}
+
+	err := tx.Model(&entity.AccessGroup{}).
+		Select("id", "public_key").
+		Where("sot_id = ? AND id IN ?", sotID, groupIDs).
+		Find(&groups).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return groups, nil
+}
+
+func (r *repository) CreateGroupsBulk(
+	tx *gorm.DB,
+	sotID string,
+	groups []entity.AccessGroup,
+) error {
+	if len(groups) == 0 {
+		return nil
+	}
+
+	for i := range groups {
+		groups[i].SotID = sotID
+		groups[i].AccessUnits = nil
+	}
+
+	return tx.CreateInBatches(&groups, 100).Error
+}
+
+func (r *repository) UpdateGroupsBulk(
+	tx *gorm.DB,
+	sotID string,
+	groups []entity.AccessGroup,
+) error {
+	for _, group := range groups {
+		err := tx.Model(&entity.AccessGroup{}).
+			Where("id = ? AND sot_id = ?", group.ID, sotID).
+			Updates(map[string]interface{}{
+				"name": group.Name,
+			}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *repository) DeleteGroupsBulk(
+	tx *gorm.DB,
+	sotID string,
+	groupIDs []string,
+) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	return tx.
+		Where("sot_id = ? AND id IN ?", sotID, groupIDs).
+		Delete(&entity.AccessGroup{}).Error
+}
+
+func (r *repository) CanAccessGroup(
+	sotID string,
+	parentGroupID string,
+	childGroupID string,
+) (bool, error) {
+	var count int64
+
+	err := r.db.Raw(`
+		WITH RECURSIVE group_path(group_id) AS (
+			SELECT ?
+
+			UNION
+
+			SELECT
+				CASE
+					WHEN h.parent_group_id = gp.group_id
+					THEN h.child_group_id
+					ELSE h.parent_group_id
+				END
+			FROM access_group_hierarchies h
+			JOIN group_path gp
+				ON h.parent_group_id = gp.group_id
+				OR h.child_group_id = gp.group_id
+			WHERE
+				h.sot_id = ?
+				AND h.wrapped_child_key IS NOT NULL
+				AND TRIM(h.wrapped_child_key) != ''
+		)
+		SELECT COUNT(*)
+		FROM group_path
+		WHERE group_id = ?
+	`, parentGroupID, sotID, childGroupID).
+		Scan(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+func (r *repository) GetGroupByUnitID(
+	sotID string,
+	unitID string,
+) (*entity.AccessGroup, error) {
+	var group entity.AccessGroup
+
+	err := r.db.
+		Joins("JOIN access_units ON access_units.group_id = access_groups.id AND access_units.sot_id = access_groups.sot_id").
+		Where(
+			"access_units.id = ? AND access_groups.sot_id = ?",
+			unitID,
+			sotID,
+		).
+		First(&group).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
+func (r *repository) GetGroupByUserID(
+	sotID string,
+	userID string,
+) (*entity.AccessGroup, error) {
+	var group entity.AccessGroup
+
+	err := r.db.
+		Joins(`
+			JOIN access_units
+				ON access_units.group_id = access_groups.id
+				AND access_units.sot_id = access_groups.sot_id
+		`).
+		Joins(`
+			JOIN users
+				ON users.access_unit_id = access_units.id
+		`).
+		Where(
+			"users.id = ? AND access_groups.sot_id = ?",
+			userID,
+			sotID,
+		).
+		First(&group).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}

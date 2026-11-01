@@ -3,234 +3,288 @@ package accesscontrol
 import (
 	"errors"
 
+	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
+	"github.com/tacenva/tacenva-core/internal/accessgroup"
+	"github.com/tacenva/tacenva-core/internal/accessunit"
 	"github.com/tacenva/tacenva-core/internal/user"
-	"github.com/tacenva/tacenva-core/permission"
-	"github.com/tacenva/tacenva-core/util/keyring"
-)
-
-var (
-	ErrNotFound   = errors.New("not found")
-	ErrPermission = errors.New("permission denied")
+	"gorm.io/gorm"
 )
 
 type Service struct {
-	userService       *user.Service
-	permissionService *permission.Service
+	userService        *user.Service
+	accessunitService  *accessunit.Service
+	accessgroupService *accessgroup.Service
+
+	Internal *Internal
+
+	transaction func(fn func(tx *gorm.DB) error) error
 }
 
 func NewService(
 	userService *user.Service,
-	permissionService *permission.Service,
+	accessunitService *accessunit.Service,
+	accessgroupService *accessgroup.Service,
+	transaction func(fn func(tx *gorm.DB) error) error,
 ) *Service {
 	return &Service{
-		userService:       userService,
-		permissionService: permissionService,
+		userService:        userService,
+		accessunitService:  accessunitService,
+		accessgroupService: accessgroupService,
+
+		Internal: NewInternalService(
+			userService,
+			accessunitService,
+			accessgroupService,
+		),
+
+		transaction: transaction,
 	}
+}
+
+func (s *Service) CreateGroup(
+	authorizer *entity.User,
+	accessGroupReq *contract.AccessGroupSetupRequest,
+) error {
+	if err := verifyAdminAccess(authorizer); err != nil {
+		return err
+	}
+
+	if accessGroupReq == nil {
+		return genericerror.ErrEmptyValue
+	}
+	if accessGroupReq.ParentGroupID == "" {
+		return errors.New("No selected parent group")
+	}
+
+	return s.accessgroupService.CreateGroup(
+		authorizer.AccessUnit.SotID,
+		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
+		accessGroupReq,
+	)
+}
+
+func (s *Service) UpdateGroup(
+	authorizer *entity.User,
+	accessGroup *entity.AccessGroup,
+) error {
+	if err := s.verifyGroupAccess(
+		authorizer,
+		authorizer.AccessUnit.GroupID,
+		accessGroup.ID,
+		false,
+	); err != nil {
+		return err
+	}
+
+	return s.accessgroupService.UpdateGroup(
+		authorizer.AccessUnit.SotID,
+		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
+		accessGroup,
+	)
+}
+
+func (s *Service) DeleteGroup(
+	authorizer *entity.User,
+	id string,
+) error {
+	if err := s.verifyGroupAccess(
+		authorizer,
+		authorizer.AccessUnit.GroupID,
+		id,
+		true,
+	); err != nil {
+		return err
+	}
+
+	return s.accessgroupService.DeleteGroup(
+		authorizer.AccessUnit.SotID,
+		authorizer.AccessUnit.GroupID,
+		authorizer.ID+":"+authorizer.Hostname,
+		id,
+	)
+}
+
+func (s *Service) GroupWithChildren(
+	authorizer *entity.User,
+	id string,
+) ([]contract.AccessGroupTree, error) {
+	if err := verifyAdminAccess(authorizer); err != nil {
+		return nil, err
+	}
+	return s.accessgroupService.GroupWithChildren(
+		authorizer.AccessUnit.SotID,
+		id,
+	)
 }
 
 func (s *Service) List(
-	authUser *entity.User,
-) ([]entity.Permission, error) {
-	if !authUser.HasAdminPermission() {
-		return nil, ErrPermission
-	}
-
-	return s.permissionService.DescendantPermission(authUser.Permission.GroupID)
-}
-
-func (s *Service) Create(
-	authUser *entity.User,
-	name string,
-	privilege entity.Privilege,
-	group *entity.PermissionGroup,
-	autoApprove bool,
 	sotID string,
-) (*entity.Permission, *keyring.KeyPair, error) {
-	if !authUser.HasAdminPermission() {
-		return nil, nil, ErrPermission
-	}
-
-	group.SotID = sotID
-
-	permissionData, keyPair, err := s.permissionService.Create(name, privilege, group, autoApprove, authUser.Permission.GroupID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return permissionData, keyPair, err
-}
-
-func (s *Service) Update(
-	authUser *entity.User,
-	permission *entity.Permission,
-	sotID string,
-) error {
-	if err := s.hasGroupPermission(
-		authUser,
-		permission.GroupID, // groupid preupdate
+) ([]entity.AccessGroup, error) {
+	return s.accessgroupService.List(
 		sotID,
-	); err != nil {
-		return err
-	}
-
-	return s.permissionService.Update(permission, authUser.Permission.GroupID, sotID)
-}
-
-func (s *Service) SetRevoked(
-	authUser *entity.User,
-	permissionId string,
-	sotID string,
-	revoked bool,
-) error {
-	permission, err := s.permissionService.GetPermission(permissionId, sotID, true)
-	if err != nil {
-		return err
-	}
-
-	if err := s.hasGroupPermission(
-		authUser,
-		permission.GroupID,
-		sotID,
-	); err != nil {
-		return err
-	}
-
-	if permission.ID == authUser.PermissionID {
-		return ErrPermission
-	}
-
-	return s.permissionService.SetRevoked(permission.ID, revoked)
-}
-
-func (s *Service) UserList(
-	authUser *entity.User,
-	permissionId string,
-	sotID string,
-) ([]entity.User, error) {
-	permission, err := s.permissionService.GetPermission(permissionId, sotID, true)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := s.hasGroupPermission(
-		authUser,
-		permission.GroupID,
-		sotID,
-	); err != nil {
-		return nil, err
-	}
-
-	return permission.Users, nil
-}
-
-func (s *Service) ApproveUserInternal(
-	userId string,
-) error {
-	return s.userService.UpdateStatus(
-		userId,
-		entity.UserStatusApproved,
 	)
 }
 
-func (s *Service) SetUserStatus(
-	authUser *entity.User,
-	sotID string,
-	userId string,
-	status entity.UserStatus,
-) error {
-	permission, err := s.permissionService.GetPermissionByUserID(userId)
-	if err != nil {
-		return err
+func (s *Service) PublicKeyOfGroups(
+	authorizer *entity.User,
+	groupIDS []string,
+) (map[string]string, error) {
+	if err := verifyWriterAccess(authorizer); err != nil {
+		return nil, err
 	}
-
-	if err := s.hasGroupPermission(
-		authUser,
-		permission.GroupID,
-		sotID,
-	); err != nil {
-		return err
-	}
-
-	return s.userService.UpdateStatus(
-		userId,
-		status,
+	return s.accessgroupService.PublicKeyList(
+		authorizer.AccessUnit.SotID,
+		groupIDS,
 	)
 }
 
-func (s *Service) DeletePermission(
-	authUser *entity.User,
-	id string,
+func (s *Service) SyncGroups(
 	sotID string,
+	groups []entity.AccessGroup,
+	lastSyncChange *entity.SyncChange,
 ) error {
-	permission, err := s.permissionService.GetPermission(id, sotID, false)
-	if err != nil {
-		return err
-	}
+	return s.accessgroupService.SyncGroups(sotID, groups, lastSyncChange)
+}
 
-	if err := s.hasGroupPermission(
-		authUser,
-		permission.GroupID,
-		sotID,
+func (s *Service) CreateUnit(
+	authorizer *entity.User,
+	accessUnitReq *contract.AccessUnitSetupReq,
+) error {
+	if err := s.verifyGroupAccess(
+		authorizer,
+		authorizer.AccessUnit.GroupID,
+		accessUnitReq.AccessUnit.GroupID,
+		false,
 	); err != nil {
 		return err
 	}
+	return s.accessunitService.CreateUnit(
+		authorizer.AccessUnit.SotID,
+		accessUnitReq,
+	)
+}
 
-	if authUser.PermissionID == id {
-		return ErrPermission
+func (s *Service) UpdateUnit(
+	authorizer *entity.User,
+	accessUnit *entity.AccessUnit,
+) error {
+	if err := s.verifyUnitAccess(
+		authorizer,
+		accessUnit.ID,
+		false,
+	); err != nil {
+		return err
 	}
-
-	return s.permissionService.Delete(id, sotID)
+	return s.accessunitService.UpdateUnit(
+		authorizer.AccessUnit.SotID,
+		accessUnit,
+	)
 }
 
-func (s *Service) InitAdminPrivilege(name string, sotID string) (*entity.Permission, *keyring.KeyPair, error) {
-	adminExists, err := s.permissionService.AdminExists()
-	if err != nil {
-		return nil, nil, err
+func (s *Service) DeleteUnit(
+	authorizer *entity.User,
+	unitID string,
+) error {
+	if err := s.verifyUnitAccess(
+		authorizer,
+		unitID,
+		true,
+	); err != nil {
+		return err
 	}
+	return s.accessunitService.DeleteUnit(
+		authorizer.AccessUnit.SotID,
+		unitID,
+	)
+}
 
-	if adminExists {
-		return nil, nil, errors.New("admin was initialized")
+func (s *Service) SetRevokeUnit(
+	authorizer *entity.User,
+	unitID string,
+	isRevoked bool,
+) error {
+	if err := s.verifyUnitAccess(
+		authorizer,
+		unitID,
+		true,
+	); err != nil {
+		return err
 	}
-
-	return s.permissionService.Create(name, entity.PrivilegeAdmin, &entity.PermissionGroup{
-		Name:  "Tacenva Admin",
-		SotID: sotID,
-	}, false, "")
+	return s.accessunitService.SetRevokeUnit(
+		authorizer.AccessUnit.SotID,
+		unitID,
+		isRevoked,
+	)
 }
 
-func (s *Service) ListInternal() ([]entity.Permission, error) {
-	return s.permissionService.ListWithPendingUsers()
-}
-
-func (s *Service) GetInternal(
-	id string,
-	sotID string,
-) (*entity.Permission, error) {
-	return s.permissionService.GetPermission(id, sotID, true)
-}
-
-func (s *Service) hasGroupPermission(
-	authUser *entity.User,
+func (s *Service) UnitList(
+	authorizer *entity.User,
 	groupID string,
-	sotID string,
-) error {
-	if !authUser.HasAdminPermission() {
-		return ErrPermission
+) ([]contract.AccessUnitWithUserCount, error) {
+	if err := verifyAdminAccess(authorizer); err != nil {
+		return nil, err
 	}
+	return s.accessunitService.UnitsByGroup(authorizer.AccessUnit.SotID, groupID)
+}
 
-	accessible, err := s.permissionService.HasGroupPermission(
-		authUser.Permission.GroupID,
-		groupID,
-		sotID,
-	)
-	if err != nil {
+func (s *Service) SetApprovalUser(
+	authorizer *entity.User,
+	userID string,
+	isRevoked bool,
+) error {
+	if err := s.verifyUserAccess(
+		authorizer,
+		userID,
+	); err != nil {
 		return err
 	}
+	return s.accessunitService.SetApprovalUser(
+		userID,
+		isRevoked,
+	)
+}
 
-	if !accessible {
-		return ErrPermission
+func (s *Service) DeleteUser(
+	authorizer *entity.User,
+	userID string,
+) error {
+	if err := s.verifyUserAccess(
+		authorizer,
+		userID,
+	); err != nil {
+		return err
 	}
+	return s.accessunitService.DeleteUser(
+		userID,
+	)
+}
 
-	return nil
+func (s *Service) GetLastSyncChange(
+	sotID string,
+) (*entity.SyncChange, error) {
+	return s.accessgroupService.GetLatestSyncChange(sotID)
+}
+
+func (s *Service) Destroy(
+	sotID string,
+) error {
+	return s.transaction(func(tx *gorm.DB) error {
+		if err := s.userService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		if err := s.accessunitService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		if err := s.accessgroupService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

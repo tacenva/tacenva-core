@@ -3,7 +3,7 @@ package keyring
 import (
 	"crypto/ecdh"
 	"crypto/hpke"
-	"encoding/base64"
+	"encoding/hex"
 )
 
 var (
@@ -13,8 +13,8 @@ var (
 )
 
 type KeyPair struct {
-	PublicKey  string
-	PrivateKey string
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
 }
 
 func GenerateKeyPair() (*KeyPair, error) {
@@ -29,8 +29,8 @@ func GenerateKeyPair() (*KeyPair, error) {
 	}
 
 	return &KeyPair{
-		PublicKey:  base64.RawURLEncoding.EncodeToString(privateKey.PublicKey().Bytes()),
-		PrivateKey: base64.RawURLEncoding.EncodeToString(privateKeyBytes),
+		PublicKey:  hex.EncodeToString(privateKey.PublicKey().Bytes()),
+		PrivateKey: hex.EncodeToString(privateKeyBytes),
 	}, nil
 }
 

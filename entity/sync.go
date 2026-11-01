@@ -1,6 +1,11 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/oklog/ulid/v2"
+	"gorm.io/gorm"
+)
 
 type SyncOperation string
 
@@ -8,6 +13,8 @@ const (
 	OperationCreate SyncOperation = "create"
 	OperationUpdate SyncOperation = "update"
 	OperationDelete SyncOperation = "delete"
+
+	OperationChange SyncOperation = "change"
 )
 
 type SyncChange struct {
@@ -27,4 +34,11 @@ type SyncState struct {
 	LastChangeID string     `json:"last_change_id" gorm:"type:varchar(26);not null"`
 	UpdatedAt    time.Time  `json:"updated_at" gorm:"not null"`
 	LastChange   SyncChange `json:"last_change" gorm:"foreignKey:LastChangeID,SotID;references:ID,SotID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (sc *SyncChange) BeforeCreate(tx *gorm.DB) error {
+	if sc.ID == "" {
+		sc.ID = ulid.Make().String()
+	}
+	return nil
 }
