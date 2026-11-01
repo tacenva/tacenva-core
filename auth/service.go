@@ -121,8 +121,9 @@ func (s *Service) GetAuthDataWithGroupList(
 	}
 
 	var (
-		groups       []entity.AccessGroup
-		lastChangeID string
+		groups         []entity.AccessGroup
+		lastSyncChange *entity.SyncChange
+		groupKeyData   *contract.GroupKeyData
 	)
 	if authorizedUser.HasWriteAccess() {
 		var err error
@@ -131,13 +132,24 @@ func (s *Service) GetAuthDataWithGroupList(
 			return nil, err
 		}
 
-		lastChangeID, err = s.accessgroupService.GetLastChangeID(sotID)
+		lastSyncChange, err = s.accessgroupService.GetLatestSyncChange(sotID)
+		if err != nil {
+			return nil, err
+		}
+
+		groupKeyData, err = s.accessunitService.GetGroupKeyByUserID(
+			authorizedUser.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	authData.GroupAssignment = &contract.GroupAssignment{
-		ID:           authorizedUser.AccessUnit.GroupID,
-		LastChangeID: lastChangeID,
-		Items:        groups,
+		ID:             authorizedUser.AccessUnit.GroupID,
+		LastSyncChange: *lastSyncChange,
+		GroupKeyData:   *groupKeyData,
+		Items:          groups,
 	}
 
 	return &authData, nil

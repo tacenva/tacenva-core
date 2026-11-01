@@ -36,17 +36,20 @@ func (l AccessLevel) IsValid() bool {
 	}
 }
 
+func (l AccessLevel) AllowsWrite() bool {
+	return l == LevelAdmin || l == LevelWrite
+}
+
+func (l AccessLevel) AllowsAdmin() bool {
+	return l == LevelAdmin
+}
+
 func (au *AccessUnit) HasWriteAccess() bool {
-	switch au.Level {
-	case LevelAdmin, LevelWrite:
-		return true
-	default:
-		return false
-	}
+	return au.Level.AllowsWrite()
 }
 
 func (au *AccessUnit) HasAdminAccess() bool {
-	return au.Level == LevelAdmin
+	return au.Level.AllowsAdmin()
 }
 
 func (au *AccessUnit) IsAllowed() bool {

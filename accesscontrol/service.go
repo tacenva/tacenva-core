@@ -9,6 +9,7 @@ import (
 	"github.com/tacenva/tacenva-core/internal/accessgroup"
 	"github.com/tacenva/tacenva-core/internal/accessunit"
 	"github.com/tacenva/tacenva-core/internal/user"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -17,12 +18,15 @@ type Service struct {
 	accessgroupService *accessgroup.Service
 
 	Internal *Internal
+
+	transaction func(fn func(tx *gorm.DB) error) error
 }
 
 func NewService(
 	userService *user.Service,
 	accessunitService *accessunit.Service,
 	accessgroupService *accessgroup.Service,
+	transaction func(fn func(tx *gorm.DB) error) error,
 ) *Service {
 	return &Service{
 		userService:        userService,
@@ -34,6 +38,8 @@ func NewService(
 			accessunitService,
 			accessgroupService,
 		),
+
+		transaction: transaction,
 	}
 }
 
@@ -139,8 +145,9 @@ func (s *Service) PublicKeyOfGroups(
 func (s *Service) SyncGroups(
 	sotID string,
 	groups []entity.AccessGroup,
+	lastSyncChange *entity.SyncChange,
 ) error {
-	return s.accessgroupService.SyncGroups(sotID, groups)
+	return s.accessgroupService.SyncGroups(sotID, groups, lastSyncChange)
 }
 
 func (s *Service) CreateUnit(
@@ -254,4 +261,30 @@ func (s *Service) DeleteUser(
 	return s.accessunitService.DeleteUser(
 		userID,
 	)
+}
+
+func (s *Service) GetLastSyncChange(
+	sotID string,
+) (*entity.SyncChange, error) {
+	return s.accessgroupService.GetLatestSyncChange(sotID)
+}
+
+func (s *Service) Destroy(
+	sotID string,
+) error {
+	return s.transaction(func(tx *gorm.DB) error {
+		if err := s.userService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		if err := s.accessunitService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		if err := s.accessgroupService.Destroy(tx, sotID); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

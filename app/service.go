@@ -45,6 +45,9 @@ func NewServices(
 		userService,
 		accessunitService,
 		accessgroupService,
+		func(fn func(tx *gorm.DB) error) error {
+			return sqliteDB.Transaction(fn)
+		},
 	)
 
 	authService := auth.NewService(

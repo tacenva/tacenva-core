@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/tacenva/tacenva-core/contract"
-	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"github.com/tacenva/tacenva-core/genericerror"
 	"github.com/tacenva/tacenva-core/sync"
@@ -42,18 +41,13 @@ func NewService(
 	}
 }
 
-func (s *Service) GetLastChangeID(
+func (s *Service) GetLatestSyncChange(
 	sotID string,
-) (string, error) {
-	syncState, err := s.syncService.GetSyncState(
+) (*entity.SyncChange, error) {
+	return s.syncService.GetLatestSyncChange(
 		sotID,
 		s.syncentityname,
 	)
-	if err != nil {
-		return "", err
-	}
-
-	return syncState.LastChangeID, nil
 }
 
 func (s *Service) CreateGroup(
@@ -62,7 +56,7 @@ func (s *Service) CreateGroup(
 	changeBy string,
 	accessGroupRequest *contract.AccessGroupSetupRequest,
 ) error {
-	debug.LogJSON("access group", accessGroupRequest)
+	// debug.LogJSON("access group", accessGroupRequest)
 	if accessGroupRequest.AdminUnit == nil || accessGroupRequest.AccessGroup == nil {
 		return errAccessAssigned
 	}
@@ -120,7 +114,7 @@ func (s *Service) CreateGroup(
 			return err
 		}
 
-		err = s.syncService.SetSyncStateToBeLastest(
+		err = s.syncService.SetSyncStateToBeLatest(
 			tx,
 			sotID,
 			s.syncentityname,
@@ -173,7 +167,7 @@ func (s *Service) UpdateGroup(
 			return err
 		}
 
-		err = s.syncService.SetSyncStateToBeLastest(
+		err = s.syncService.SetSyncStateToBeLatest(
 			tx,
 			sotID,
 			s.syncentityname,
@@ -212,7 +206,7 @@ func (s *Service) DeleteGroup(
 			return err
 		}
 
-		err = s.syncService.SetSyncStateToBeLastest(
+		err = s.syncService.SetSyncStateToBeLatest(
 			tx,
 			sotID,
 			s.syncentityname,
@@ -297,6 +291,7 @@ func (s *Service) PublicKeyList(
 func (s *Service) SyncGroups(
 	sotID string,
 	groups []entity.AccessGroup,
+	lastSyncChange *entity.SyncChange,
 ) error {
 	if sotID == "" {
 		return errors.New("sot ID cannot be empty")
@@ -368,6 +363,14 @@ func (s *Service) SyncGroups(
 			return err
 		}
 
+		s.syncService.InsertSyncChangesTx(
+			tx,
+			sotID,
+			s.syncentityname,
+			[]entity.SyncChange{
+				*lastSyncChange,
+			},
+		)
 		return nil
 	})
 }

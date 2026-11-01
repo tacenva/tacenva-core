@@ -222,3 +222,37 @@ func (r *repository) DeleteUser(
 
 	return nil
 }
+
+func (r *repository) GetGroupKeyByUserID(
+	userID string,
+) (*contract.GroupKeyData, error) {
+	var result contract.GroupKeyData
+
+	err := r.db.
+		Table("access_group_keys AS agk").
+		Select("agk.wrapped_key, ag.public_key").
+		Joins(`
+            JOIN access_units AS au
+                ON au.id = agk.access_unit_id
+                AND au.group_id = agk.access_group_id
+                AND au.sot_id = agk.sot_id
+        `).
+		Joins(`
+            JOIN access_groups AS ag
+                ON ag.id = agk.access_group_id
+                AND ag.sot_id = agk.sot_id
+        `).
+		Joins(`
+            JOIN users AS u
+                ON u.access_unit_id = au.id
+        `).
+		Where("u.id = ?", userID).
+		First(&result).
+		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

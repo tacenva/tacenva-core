@@ -182,3 +182,13 @@ func (s *Service) List(
 ) ([]entity.AccessUnit, error) {
 	return s.repository.FindAll(sotID)
 }
+
+func (s *Service) GetGroupKeyByUserID(
+	userID string,
+) (*contract.GroupKeyData, error) {
+	if userID == "" {
+		return nil, genericerror.ErrEmptyValue
+	}
+
+	return s.repository.GetGroupKeyByUserID(userID)
+}

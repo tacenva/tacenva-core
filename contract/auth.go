@@ -16,11 +16,15 @@ type EnrollResponse struct {
 }
 
 type GroupAssignment struct {
-	ID                string               `json:"group_id,omitempty"`
-	LastChangeID      string               `json:"last_change_id,omitempty"`
-	PublicKey         string               `json:"public_key,omitempty"`
-	WrappedPrivateKey string               `json:"wrapped_private_key,omitempty"`
-	Items             []entity.AccessGroup `json:"items,omitempty"`
+	ID             string               `json:"group_id,omitempty"`
+	LastSyncChange entity.SyncChange    `json:"last_sync_change,omitempty"`
+	GroupKeyData   GroupKeyData         `json:"group_key_data,omitempty"`
+	Items          []entity.AccessGroup `json:"items,omitempty"`
+}
+
+type GroupKeyData struct {
+	WrappedKey string `gorm:"column:wrapped_key"`
+	PublicKey  string `gorm:"column:public_key"`
 }
 
 type AuthDataResp struct {
