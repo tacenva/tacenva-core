@@ -26,27 +26,6 @@ func NewService(
 	}
 }
 
-func (s *Service) RecordChangeWithoutTx(
-	syncChangeID *string,
-	entityName string,
-	entityID string,
-	operation entity.SyncOperation,
-	sotID string,
-	changedBy string,
-) error {
-	return s.Transaction(func(tx *gorm.DB) error {
-		return s.RecordChange(
-			tx,
-			syncChangeID,
-			entityName,
-			entityID,
-			operation,
-			sotID,
-			changedBy,
-		)
-	})
-}
-
 func (s *Service) RecordChange(
 	tx *gorm.DB,
 	syncChangeID *string,
@@ -183,7 +162,9 @@ func (s *Service) GetChangeCount(
 	if entityName == "" {
 		return 0, fmt.Errorf("sync entity is required")
 	}
-
+	// if startID == "" {
+	// 	return 0, nil
+	// }
 	return s.repository.GetChangeCount(
 		sotID,
 		entityName,
@@ -198,31 +179,6 @@ func (s *Service) Transaction(
 }
 
 func (s *Service) InsertSyncChanges(
-	sotID string,
-	entityName string,
-	changes []entity.SyncChange,
-) error {
-	if len(changes) == 0 {
-		return nil
-	}
-	if sotID == "" {
-		return fmt.Errorf("sot id is required")
-	}
-	if entityName == "" {
-		return fmt.Errorf("sync entity is required")
-	}
-
-	return s.Transaction(func(tx *gorm.DB) error {
-		return s.InsertSyncChangesTx(
-			tx,
-			sotID,
-			entityName,
-			changes,
-		)
-	})
-}
-
-func (s *Service) InsertSyncChangesTx(
 	tx *gorm.DB,
 	sotID string,
 	entityName string,

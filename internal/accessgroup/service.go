@@ -363,7 +363,7 @@ func (s *Service) SyncGroups(
 			return err
 		}
 
-		s.syncService.InsertSyncChangesTx(
+		s.syncService.InsertSyncChanges(
 			tx,
 			sotID,
 			s.syncentityname,
