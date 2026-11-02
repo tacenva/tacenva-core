@@ -112,7 +112,12 @@ func (s *Service) GroupWithChildren(
 	authorizer *entity.User,
 	id string,
 ) ([]contract.AccessGroupTree, error) {
-	if err := verifyAdminAccess(authorizer); err != nil {
+	if err := s.verifyGroupAccess(
+		authorizer,
+		authorizer.AccessUnit.GroupID,
+		id,
+		false,
+	); err != nil {
 		return nil, err
 	}
 	return s.accessgroupService.GroupWithChildren(
