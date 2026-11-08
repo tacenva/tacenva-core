@@ -29,6 +29,7 @@ func NewInternalService(
 
 func (s *Internal) InitAccess(
 	sotID string,
+	groupName string,
 ) (keyPairOfUnit, keyPairOfGroup *keyring.KeyPair, err error) {
 	keyPairOfGroup, err = keyring.GenerateKeyPair()
 	if err != nil {
@@ -37,7 +38,7 @@ func (s *Internal) InitAccess(
 
 	accessGroup := entity.AccessGroup{
 		SotID:     sotID,
-		Name:      "Tacenva",
+		Name:      groupName,
 		PublicKey: keyPairOfGroup.PublicKey,
 	}
 

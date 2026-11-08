@@ -80,18 +80,18 @@ func (s *Service) verifyUnitAccess(
 		return err
 	}
 
+	if selfAccessdenied {
+		if unitID == authorizer.AccessUnit.ID {
+			return errSelfAccessDenied
+		}
+	}
+
 	toAccessGroup, err := s.accessgroupService.GetGroupByUnitID(
 		authorizer.AccessUnit.SotID,
 		unitID,
 	)
 	if err != nil {
 		return err
-	}
-
-	if selfAccessdenied {
-		if toAccessGroup.ID == authorizer.AccessUnit.GroupID {
-			return errSelfAccessDenied
-		}
 	}
 
 	isAccessible, err := s.accessgroupService.CanAccessGroup(

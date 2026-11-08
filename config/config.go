@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	ConfigDirName  = ".tacenva"
+	ConfigDirName  = "Tacenva"
 	ConfigFileName = "config.toml"
 
 	AppDBFileName                = "tacenva.db"
@@ -41,10 +41,7 @@ type TLSConfig struct {
 func Default() (*Config, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return nil, fmt.Errorf(
-			"get hostname: %w",
-			err,
-		)
+		return nil, fmt.Errorf("get hostname: %w", err)
 	}
 
 	return &Config{
@@ -53,8 +50,8 @@ func Default() (*Config, error) {
 			Hostname: hostname,
 		},
 		TLS: TLSConfig{
-			CertFile: "certs/server.crt",
-			KeyFile:  "certs/server.key",
+			CertFile: filepath.Join("certs", "server.crt"),
+			KeyFile:  filepath.Join("certs", "server.key"),
 		},
 	}, nil
 }
@@ -63,6 +60,22 @@ func (cfg *Config) Path(parts ...string) string {
 	return filepath.Join(
 		append([]string{cfg.BaseDir}, parts...)...,
 	)
+}
+
+func (cfg *Config) TLSCertPath() string {
+	if filepath.IsAbs(cfg.TLS.CertFile) {
+		return cfg.TLS.CertFile
+	}
+
+	return cfg.Path(cfg.TLS.CertFile)
+}
+
+func (cfg *Config) TLSKeyPath() string {
+	if filepath.IsAbs(cfg.TLS.KeyFile) {
+		return cfg.TLS.KeyFile
+	}
+
+	return cfg.Path(cfg.TLS.KeyFile)
 }
 
 func (cfg *Config) VaultDir() string {
@@ -81,10 +94,7 @@ func (cfg *Config) setSotID(sotID string) error {
 	cfg.SotID = sotID
 
 	if err := cfg.Save(); err != nil {
-		return fmt.Errorf(
-			"save sot ulid: %w",
-			err,
-		)
+		return fmt.Errorf("save sot ulid: %w", err)
 	}
 
 	return nil
@@ -92,42 +102,22 @@ func (cfg *Config) setSotID(sotID string) error {
 
 func (cfg *Config) Save() error {
 	if cfg.BaseDir == "" {
-		return fmt.Errorf(
-			"config base directory is required",
-		)
+		return fmt.Errorf("config base directory is required")
 	}
 
-	if err := os.MkdirAll(
-		cfg.BaseDir,
-		0755,
-	); err != nil {
-		return fmt.Errorf(
-			"create config directory: %w",
-			err,
-		)
+	if err := os.MkdirAll(cfg.BaseDir, 0700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
 	}
 
 	data, err := toml.Marshal(cfg)
 	if err != nil {
-		return fmt.Errorf(
-			"encode config: %w",
-			err,
-		)
+		return fmt.Errorf("encode config: %w", err)
 	}
 
-	configPath := cfg.Path(
-		ConfigFileName,
-	)
+	configPath := cfg.Path(ConfigFileName)
 
-	if err := os.WriteFile(
-		configPath,
-		data,
-		0644,
-	); err != nil {
-		return fmt.Errorf(
-			"write config: %w",
-			err,
-		)
+	if err := atomicWrite(configPath, data, 0600); err != nil {
+		return fmt.Errorf("write config: %w", err)
 	}
 
 	return nil
@@ -139,17 +129,11 @@ func Load(dev bool) (*Config, error) {
 		return nil, err
 	}
 
-	configPath := filepath.Join(
-		baseDir,
-		ConfigFileName,
-	)
+	configPath := filepath.Join(baseDir, ConfigFileName)
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"read config: %w",
-			err,
-		)
+		return nil, fmt.Errorf("read config: %w", err)
 	}
 
 	cfg, err := Default()
@@ -157,16 +141,8 @@ func Load(dev bool) (*Config, error) {
 		return nil, err
 	}
 
-	cfg.BaseDir = baseDir
-
-	if _, err := toml.Decode(
-		string(data),
-		cfg,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"decode config: %w",
-			err,
-		)
+	if _, err := toml.Decode(string(data), cfg); err != nil {
+		return nil, fmt.Errorf("decode config: %w", err)
 	}
 
 	cfg.BaseDir = baseDir
@@ -180,10 +156,7 @@ func LoadOrCreate(dev bool) (*Config, error) {
 		return nil, err
 	}
 
-	configPath := filepath.Join(
-		baseDir,
-		ConfigFileName,
-	)
+	configPath := filepath.Join(baseDir, ConfigFileName)
 
 	if _, err := os.Stat(configPath); err == nil {
 		cfg, err := Load(dev)
@@ -192,19 +165,14 @@ func LoadOrCreate(dev bool) (*Config, error) {
 		}
 
 		if cfg.SotID == "" {
-			if err := cfg.setSotID(
-				ulid.Make().String(),
-			); err != nil {
+			if err := cfg.setSotID(ulid.Make().String()); err != nil {
 				return nil, err
 			}
 		}
 
 		return cfg, nil
 	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf(
-			"check config: %w",
-			err,
-		)
+		return nil, fmt.Errorf("check config: %w", err)
 	}
 
 	cfg, err := Default()
@@ -214,9 +182,7 @@ func LoadOrCreate(dev bool) (*Config, error) {
 
 	cfg.BaseDir = baseDir
 
-	if err := cfg.setSotID(
-		ulid.Make().String(),
-	); err != nil {
+	if err := cfg.setSotID(ulid.Make().String()); err != nil {
 		return nil, err
 	}
 
@@ -224,12 +190,9 @@ func LoadOrCreate(dev bool) (*Config, error) {
 }
 
 func getBaseDir(dev bool) (string, error) {
-	homeDir, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf(
-			"get home directory: %w",
-			err,
-		)
+		return "", fmt.Errorf("get config directory: %w", err)
 	}
 
 	dirName := ConfigDirName
@@ -238,8 +201,5 @@ func getBaseDir(dev bool) (string, error) {
 		dirName += "-dev"
 	}
 
-	return filepath.Join(
-		homeDir,
-		dirName,
-	), nil
+	return filepath.Join(configDir, dirName), nil
 }
