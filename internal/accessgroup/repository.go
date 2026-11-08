@@ -285,6 +285,63 @@ func (r *repository) FindAll(
 	return groups, nil
 }
 
+func (r *repository) FindTree(
+	groupID string,
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+
+	query := `
+		WITH RECURSIVE
+		ancestors(id) AS (
+			SELECT ?
+			UNION
+			SELECT h.parent_group_id
+			FROM access_group_hierarchies h
+			JOIN ancestors a ON h.child_group_id = a.id
+			WHERE h.sot_id = ?
+		),
+		roots(id) AS (
+			SELECT a.id
+			FROM ancestors a
+			WHERE NOT EXISTS (
+				SELECT 1
+				FROM access_group_hierarchies h
+				WHERE h.sot_id = ?
+				  AND h.child_group_id = a.id
+			)
+		),
+		tree(id) AS (
+			SELECT id FROM roots
+			UNION
+			SELECT h.child_group_id
+			FROM access_group_hierarchies h
+			JOIN tree t ON h.parent_group_id = t.id
+			WHERE h.sot_id = ?
+		)
+		SELECT g.id, g.name
+		FROM access_groups g
+		JOIN tree t ON t.id = g.id
+		WHERE g.sot_id = ?
+		ORDER BY g.name ASC
+	`
+
+	err := r.db.Raw(
+		query,
+		groupID,
+		sotID,
+		sotID,
+		sotID,
+		sotID,
+	).Scan(&groups).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return groups, nil
+}
+
 func (r *repository) FindKeysByIDs(
 	tx *gorm.DB,
 	sotID string,

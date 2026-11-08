@@ -70,7 +70,7 @@ func (r *repository) FindAll() ([]entity.User, error) {
 	var users []entity.User
 
 	err := r.db.
-		Order("hostname ASC").
+		Order("sot_identity ASC").
 		Find(&users).
 		Error
 
@@ -87,7 +87,7 @@ func (r *repository) Update(user *entity.User) error {
 		Where("id = ?", user.ID).
 		Updates(map[string]any{
 			"access_unit_id": user.AccessUnitID,
-			"hostname":       user.Hostname,
+			"sot_identity":   user.SotIdentity,
 			"token":          user.Token,
 			"status":         user.Status,
 		}).
@@ -107,7 +107,7 @@ func (r *repository) FindAllIDsExcept(userID string) ([]string, error) {
 	if err := r.db.
 		Model(&entity.User{}).
 		Where("id != ? AND status = ?", userID, entity.UserStatusApproved).
-		Order("hostname ASC").
+		Order("sot_identity ASC").
 		Pluck("id", &userIDs).
 		Error; err != nil {
 		return nil, err

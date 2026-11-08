@@ -3,6 +3,7 @@ package auth
 import (
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"github.com/tacenva/tacenva-core/internal/accessgroup"
 	"github.com/tacenva/tacenva-core/internal/accessunit"
 	"github.com/tacenva/tacenva-core/internal/user"
@@ -12,20 +13,20 @@ type Service struct {
 	userService        *user.Service
 	accessunitService  *accessunit.Service
 	accessgroupService *accessgroup.Service
-	sotHostname        string
+	sotIdentity        string
 }
 
 func NewService(
 	userService *user.Service,
 	accessunitService *accessunit.Service,
 	accessgroupService *accessgroup.Service,
-	sotHostname string,
+	sotIdentity string,
 ) *Service {
 	return &Service{
 		userService:        userService,
 		accessunitService:  accessunitService,
 		accessgroupService: accessgroupService,
-		sotHostname:        sotHostname,
+		sotIdentity:        sotIdentity,
 	}
 }
 
@@ -47,7 +48,7 @@ func (s *Service) Enroll(
 	}
 
 	user, token, err := s.userService.Create(
-		enrollRequest.Hostname,
+		enrollRequest.ReplicaIdentity,
 		accessUnit.ID,
 		userStatus,
 	)
@@ -56,7 +57,7 @@ func (s *Service) Enroll(
 	}
 
 	response := contract.EnrollResponse{
-		SotHostname: s.sotHostname,
+		SotIdentity: s.sotIdentity,
 		Status:      userStatus,
 		AuthToken:   token,
 		AccessLevel: accessUnit.Level,
@@ -66,7 +67,7 @@ func (s *Service) Enroll(
 		var groups []entity.AccessGroup
 
 		if accessUnit.Level != entity.LevelRead {
-			groups, err = s.accessgroupService.List(sotID)
+			groups, err = s.accessgroupService.GetTree(user.AccessUnit.GroupID, sotID)
 			if err != nil {
 				return nil, err
 			}
@@ -87,8 +88,8 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 		return nil, err
 	}
 
-	if userData.AccessUnit.Revoked {
-		// return nil, permission.ErrRevoked
+	if !userData.AccessUnit.IsAllowed() {
+		return nil, genericerror.ErrAccessRevoked
 	}
 
 	switch userData.Status {
@@ -96,10 +97,10 @@ func (s *Service) GetUserData(token string) (*entity.User, error) {
 		return userData, nil
 
 	case entity.UserStatusPending:
-		return nil, user.ErrPending
+		return nil, genericerror.ErrAccessPending
 
 	case entity.UserStatusRevoked:
-		return nil, user.ErrRevoked
+		return nil, genericerror.ErrAccessRevoked
 
 	default:
 		return nil, user.ErrStatusInvalid
@@ -127,7 +128,7 @@ func (s *Service) GetAuthDataWithGroupList(
 	)
 	if authorizedUser.HasWriteAccess() {
 		var err error
-		groups, err = s.accessgroupService.List(sotID)
+		groups, err = s.accessgroupService.GetTree(authorizedUser.AccessUnit.GroupID, sotID)
 		if err != nil {
 			return nil, err
 		}

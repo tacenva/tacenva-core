@@ -15,9 +15,10 @@ type AccessGroup struct {
 }
 
 type AccessGroupHierarchy struct {
-	SotID           string `json:"-" gorm:"type:varchar(26);primaryKey"`
-	ParentGroupID   string `json:"parent_group_id" gorm:"type:varchar(26);primaryKey;index"`
-	ChildGroupID    string `json:"child_group_id" gorm:"type:varchar(26);primaryKey;index"`
+	SotID         string `json:"-" gorm:"type:varchar(26);primaryKey;index:idx_hierarchy_parent,priority:1;index:idx_hierarchy_child,priority:1"`
+	ParentGroupID string `json:"parent_group_id" gorm:"type:varchar(26);primaryKey;index:idx_hierarchy_parent,priority:2"`
+	ChildGroupID  string `json:"child_group_id" gorm:"type:varchar(26);primaryKey;index:idx_hierarchy_parent,priority:2"`
+
 	WrappedChildKey string `json:"wrapped_child_key" gorm:"type:text;default:null"`
 
 	Parent AccessGroup `json:"parent,omitempty" gorm:"foreignKey:ParentGroupID,SotID;references:ID,SotID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

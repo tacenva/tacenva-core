@@ -2,6 +2,7 @@ package accessgroup
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/tacenva/tacenva-core/contract"
 	"github.com/tacenva/tacenva-core/entity"
@@ -245,22 +246,40 @@ func (s *Service) GroupWithChildren(
 	return groups, nil
 }
 
-func (s *Service) List(
+// func (s *Service) List(
+// 	sotID string,
+// ) ([]entity.AccessGroup, error) {
+// 	var groups []entity.AccessGroup
+// 	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
+// 		result, err := s.repository.FindAll(tx, sotID)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		groups = result
+// 		return nil
+// 	})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return groups, nil
+// }
+
+func (s *Service) GetTree(
+	groupID string,
 	sotID string,
 ) ([]entity.AccessGroup, error) {
-	var groups []entity.AccessGroup
-	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
-		result, err := s.repository.FindAll(tx, sotID)
-		if err != nil {
-			return err
-		}
-		groups = result
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	groupID = strings.TrimSpace(groupID)
+	sotID = strings.TrimSpace(sotID)
+
+	if groupID == "" {
+		return nil, errors.New("access group id cannot be empty")
 	}
-	return groups, nil
+
+	if sotID == "" {
+		return nil, errors.New("sot id cannot be empty")
+	}
+
+	return s.repository.FindTree(groupID, sotID)
 }
 
 func (s *Service) PublicKeyList(

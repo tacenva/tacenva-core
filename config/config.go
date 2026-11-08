@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/oklog/ulid/v2"
@@ -40,20 +42,44 @@ type TLSConfig struct {
 
 func Default() (*Config, error) {
 	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("get hostname: %w", err)
+	if err != nil || strings.TrimSpace(hostname) == "" {
+		hostname = "unknown"
 	}
 
 	return &Config{
 		Server: ServerConfig{
 			Port:     DefaultPort,
-			Hostname: hostname,
+			Hostname: strings.ToLower(strings.TrimSpace(hostname)),
 		},
 		TLS: TLSConfig{
 			CertFile: filepath.Join("certs", "server.crt"),
 			KeyFile:  filepath.Join("certs", "server.key"),
 		},
 	}, nil
+}
+
+func (cfg *Config) Identity() string {
+	username := "unknown"
+
+	currentUser, err := user.Current()
+	if err == nil {
+		username = strings.TrimSpace(currentUser.Username)
+
+		if index := strings.LastIndex(username, `\`); index >= 0 {
+			username = username[index+1:]
+		}
+
+		if username == "" {
+			username = "unknown"
+		}
+	}
+
+	hostname := strings.TrimSpace(cfg.Server.Hostname)
+	if hostname == "" {
+		hostname = "unknown"
+	}
+
+	return strings.ToLower(username + "@" + hostname)
 }
 
 func (cfg *Config) Path(parts ...string) string {

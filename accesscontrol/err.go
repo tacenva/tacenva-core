@@ -20,6 +20,10 @@ func verifyAdminAccess(authorizer *entity.User) error {
 		return errInvalidAuthorizer
 	}
 
+	if err := authorizer.ValidateAccess(); err != nil {
+		return err
+	}
+
 	if !authorizer.HasAdminAccess() {
 		return errAdminOnly
 	}
@@ -30,6 +34,10 @@ func verifyAdminAccess(authorizer *entity.User) error {
 func verifyWriterAccess(authorizer *entity.User) error {
 	if authorizer == nil {
 		return errInvalidAuthorizer
+	}
+
+	if err := authorizer.ValidateAccess(); err != nil {
+		return err
 	}
 
 	if !authorizer.HasWriteAccess() {

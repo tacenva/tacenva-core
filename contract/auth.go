@@ -3,12 +3,12 @@ package contract
 import "github.com/tacenva/tacenva-core/entity"
 
 type EnrollRequest struct {
-	Hostname  string `json:"hostname"`
-	PublicKey string `json:"public_key"`
+	ReplicaIdentity string `json:"replica_identity"`
+	PublicKey       string `json:"public_key"`
 }
 
 type EnrollResponse struct {
-	SotHostname     string             `json:"sot_hostname"`
+	SotIdentity     string             `json:"sot_identity"`
 	Status          entity.UserStatus  `json:"status"`
 	AccessLevel     entity.AccessLevel `json:"access_level"`
 	AuthToken       string             `json:"auth_token"`

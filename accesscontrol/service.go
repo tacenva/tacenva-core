@@ -61,7 +61,7 @@ func (s *Service) CreateGroup(
 	return s.accessgroupService.CreateGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
-		authorizer.ID+":"+authorizer.Hostname,
+		authorizer.IdentityKey(),
 		accessGroupReq,
 	)
 }
@@ -82,7 +82,7 @@ func (s *Service) UpdateGroup(
 	return s.accessgroupService.UpdateGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
-		authorizer.ID+":"+authorizer.Hostname,
+		authorizer.IdentityKey(),
 		accessGroup,
 	)
 }
@@ -103,7 +103,7 @@ func (s *Service) DeleteGroup(
 	return s.accessgroupService.DeleteGroup(
 		authorizer.AccessUnit.SotID,
 		authorizer.AccessUnit.GroupID,
-		authorizer.ID+":"+authorizer.Hostname,
+		authorizer.IdentityKey(),
 		id,
 	)
 }
@@ -130,10 +130,20 @@ func (s *Service) GroupWithChildren(
 	)
 }
 
-func (s *Service) List(
+// func (s *Service) List(
+// 	sotID string,
+// ) ([]entity.AccessGroup, error) {
+// 	return s.accessgroupService.List(
+// 		sotID,
+// 	)
+// }
+
+func (s *Service) GetTree(
+	groupID string,
 	sotID string,
 ) ([]entity.AccessGroup, error) {
-	return s.accessgroupService.List(
+	return s.accessgroupService.GetTree(
+		groupID,
 		sotID,
 	)
 }

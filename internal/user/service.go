@@ -9,12 +9,10 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("user not found")
-	ErrHostnameEmpty = errors.New("user hostname cannot be empty")
-	ErrTokenEmpty    = errors.New("token cannot be empty")
-	ErrStatusInvalid = errors.New("invalid user status")
-	ErrPending       = errors.New("user is not approved")
-	ErrRevoked       = errors.New("user is revoked")
+	ErrNotFound         = errors.New("user not found")
+	ErrSotIdentityEmpty = errors.New("user sot identity cannot be empty")
+	ErrTokenEmpty       = errors.New("token cannot be empty")
+	ErrStatusInvalid    = errors.New("invalid user status")
 )
 
 const tokenSize = 32
@@ -30,15 +28,15 @@ func NewService(repository *repository) *Service {
 }
 
 func (s *Service) Create(
-	hostname string,
+	sotIdentity string,
 	accessUnitID string,
 	userStatus entity.UserStatus,
 ) (*entity.User, string, error) {
-	hostname = strings.TrimSpace(hostname)
+	sotIdentity = strings.ToLower(strings.TrimSpace(sotIdentity))
 	accessUnitID = strings.TrimSpace(accessUnitID)
 
-	if hostname == "" {
-		return nil, "", ErrHostnameEmpty
+	if sotIdentity == "" {
+		return nil, "", ErrSotIdentityEmpty
 	}
 
 	token, err := credential.Generate(tokenSize)
@@ -48,7 +46,7 @@ func (s *Service) Create(
 
 	user := &entity.User{
 		AccessUnitID: accessUnitID,
-		Hostname:     hostname,
+		SotIdentity:  sotIdentity,
 		Token:        credential.Hash(token),
 		Status:       userStatus,
 	}
@@ -83,17 +81,17 @@ func (s *Service) GetByToken(token string) (*entity.User, error) {
 
 func (s *Service) Update(
 	id string,
-	hostname string,
+	sotIdentity string,
 ) (*entity.User, error) {
 	id = strings.TrimSpace(id)
-	hostname = strings.TrimSpace(hostname)
+	sotIdentity = strings.ToLower(strings.TrimSpace(sotIdentity))
 
 	if id == "" {
 		return nil, ErrNotFound
 	}
 
-	if hostname == "" {
-		return nil, ErrHostnameEmpty
+	if sotIdentity == "" {
+		return nil, ErrSotIdentityEmpty
 	}
 
 	user, err := s.repository.FindByID(id)
@@ -105,7 +103,7 @@ func (s *Service) Update(
 		return nil, ErrNotFound
 	}
 
-	user.Hostname = hostname
+	user.SotIdentity = sotIdentity
 
 	if err := s.repository.Update(user); err != nil {
 		return nil, err
