@@ -246,23 +246,23 @@ func (s *Service) GroupWithChildren(
 	return groups, nil
 }
 
-// func (s *Service) List(
-// 	sotID string,
-// ) ([]entity.AccessGroup, error) {
-// 	var groups []entity.AccessGroup
-// 	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
-// 		result, err := s.repository.FindAll(tx, sotID)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		groups = result
-// 		return nil
-// 	})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return groups, nil
-// }
+func (s *Service) List(
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	var groups []entity.AccessGroup
+	err := s.repository.db.Transaction(func(tx *gorm.DB) error {
+		result, err := s.repository.FindAll(tx, sotID)
+		if err != nil {
+			return err
+		}
+		groups = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
 
 func (s *Service) GetTree(
 	groupID string,
@@ -314,6 +314,10 @@ func (s *Service) SyncGroups(
 ) error {
 	if sotID == "" {
 		return errors.New("sot ID cannot be empty")
+	}
+
+	if len(groups) == 0 {
+		return nil
 	}
 
 	// Validasi input dan cegah ID duplikat.
@@ -382,14 +386,16 @@ func (s *Service) SyncGroups(
 			return err
 		}
 
-		s.syncService.InsertSyncChanges(
-			tx,
-			sotID,
-			s.syncentityname,
-			[]entity.SyncChange{
-				*lastSyncChange,
-			},
-		)
+		if lastSyncChange != nil {
+			s.syncService.InsertSyncChanges(
+				tx,
+				sotID,
+				s.syncentityname,
+				[]entity.SyncChange{
+					*lastSyncChange,
+				},
+			)
+		}
 		return nil
 	})
 }

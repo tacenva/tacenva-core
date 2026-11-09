@@ -32,10 +32,6 @@ func (s *Service) CreateUnitByTx(
 		return genericerror.ErrEmptyValue
 	}
 
-	// if accessUnit.GroupID != authorizerGroupID {
-	// 	// return
-	// }
-
 	accessUnit.SotID = sotID
 	return tx.Transaction(func(tx *gorm.DB) error {
 		err := s.repository.CreateUnit(tx, accessUnit)
@@ -70,37 +66,6 @@ func (s *Service) CreateUnit(
 		accessUnitReq.WrappedGroupKey,
 	)
 }
-
-// func (s *Service) Simulate() error {
-// 	keyPairForAccessGroup, _ := keyring.GenerateKeyPair()
-// 	accessGroup := entity.AccessGroup{
-// 		Name:      "Somethin",
-// 		PublicKey: keyPairForAccessGroup.PublicKey,
-// 	}
-
-// 	keyPairForAccessUnit, _ := keyring.GenerateKeyPair()
-// 	adminUnit := entity.AccessUnit{
-// 		Name:        accessGroup.Name + " admin",
-// 		Level:       entity.LevelAdmin,
-// 		PublicKey:   keyPairForAccessUnit.PublicKey,
-// 		Revoked:     false,
-// 		AutoApprove: false,
-// 	}
-
-// 	pura2nyaparent, _ := keyring.GenerateKeyPair()
-// 	wrappedGroupKey, _ := keyPairForAccessUnit.Seal([]byte(keyPairForAccessGroup.PrivateKey))
-// 	wrappedChildKey, _ := pura2nyaparent.Seal([]byte(keyPairForAccessGroup.PrivateKey))
-
-// 	return s.CreateGroup(
-// 		"",
-// 		"",
-// 		&accessGroup,
-// 		&adminUnit,
-// 		"",
-// 		wrappedGroupKey,
-// 		wrappedChildKey,
-// 	)
-// }
 
 func (s *Service) UpdateUnit(
 	sotID string,

@@ -105,11 +105,59 @@ func (s *Service) RecordChange(
 	return nil
 }
 
+func (s *Service) getChangesAfter(
+	sotID string,
+	entityName string,
+	startID string,
+	total int64,
+) ([]entity.SyncChange, error) {
+	if total <= 0 {
+		return nil, nil
+	}
+
+	const maxLimit int64 = 1<<31 - 1
+
+	limit := total
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	batch, err := s.repository.GetChangesAfter(
+		sotID,
+		entityName,
+		startID,
+		int(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(batch) == 0 {
+		return nil, nil
+	}
+
+	if int64(len(batch)) >= total {
+		return batch, nil
+	}
+
+	remaining, err := s.getChangesAfter(
+		sotID,
+		entityName,
+		batch[len(batch)-1].ID,
+		total-int64(len(batch)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(batch, remaining...), nil
+}
+
 func (s *Service) GetChangesAfter(
 	sotID string,
 	entityName string,
 	startID string,
-	limit int,
+	limit int64,
 ) ([]entity.SyncChange, error) {
 	if sotID == "" {
 		return nil, fmt.Errorf("sot id is required")
@@ -121,7 +169,7 @@ func (s *Service) GetChangesAfter(
 		limit = defaultSyncChangeLimit
 	}
 
-	return s.repository.GetChangesAfter(
+	return s.getChangesAfter(
 		sotID,
 		entityName,
 		startID,

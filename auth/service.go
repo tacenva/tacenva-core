@@ -64,18 +64,35 @@ func (s *Service) Enroll(
 	}
 
 	if userStatus == entity.UserStatusApproved {
-		var groups []entity.AccessGroup
+		var (
+			groups         []entity.AccessGroup
+			lastSyncChange *entity.SyncChange
+		)
 
-		if accessUnit.Level != entity.LevelRead {
+		if accessUnit.Level.AllowsWrite() {
 			groups, err = s.accessgroupService.GetTree(user.AccessUnit.GroupID, sotID)
+			if err != nil {
+				return nil, err
+			}
+
+			lastSyncChange, err = s.accessgroupService.GetLatestSyncChange(sotID)
 			if err != nil {
 				return nil, err
 			}
 		}
 
+		groupKeyData, err := s.accessunitService.GetGroupKeyByUserID(
+			user.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+
 		response.GroupAssignment = &contract.GroupAssignment{
-			ID:    user.AccessUnit.GroupID,
-			Items: groups,
+			ID:             user.AccessUnit.GroupID,
+			LastSyncChange: lastSyncChange,
+			GroupKeyData:   *groupKeyData,
+			Items:          groups,
 		}
 	}
 
@@ -124,8 +141,8 @@ func (s *Service) GetAuthDataWithGroupList(
 	var (
 		groups         []entity.AccessGroup
 		lastSyncChange *entity.SyncChange
-		groupKeyData   *contract.GroupKeyData
 	)
+
 	if authorizedUser.HasWriteAccess() {
 		var err error
 		groups, err = s.accessgroupService.GetTree(authorizedUser.AccessUnit.GroupID, sotID)
@@ -137,18 +154,18 @@ func (s *Service) GetAuthDataWithGroupList(
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		groupKeyData, err = s.accessunitService.GetGroupKeyByUserID(
-			authorizedUser.ID,
-		)
-		if err != nil {
-			return nil, err
-		}
+	groupKeyData, err := s.accessunitService.GetGroupKeyByUserID(
+		authorizedUser.ID,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	authData.GroupAssignment = &contract.GroupAssignment{
 		ID:             authorizedUser.AccessUnit.GroupID,
-		LastSyncChange: *lastSyncChange,
+		LastSyncChange: lastSyncChange,
 		GroupKeyData:   *groupKeyData,
 		Items:          groups,
 	}

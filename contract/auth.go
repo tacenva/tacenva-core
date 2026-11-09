@@ -17,7 +17,7 @@ type EnrollResponse struct {
 
 type GroupAssignment struct {
 	ID             string               `json:"group_id,omitempty"`
-	LastSyncChange entity.SyncChange    `json:"last_sync_change,omitempty"`
+	LastSyncChange *entity.SyncChange   `json:"last_sync_change,omitempty"`
 	GroupKeyData   GroupKeyData         `json:"group_key_data,omitempty"`
 	Items          []entity.AccessGroup `json:"items,omitempty"`
 }

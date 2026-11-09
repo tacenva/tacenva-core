@@ -2,6 +2,7 @@ package accessgroup
 
 import (
 	"github.com/tacenva/tacenva-core/contract"
+	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"gorm.io/gorm"
 )
@@ -285,6 +286,12 @@ func (r *repository) FindAll(
 	return groups, nil
 }
 
+// FindTree returns the entire access group tree rooted at the oldest
+// ancestor of the specified group within the given SOT.
+//
+// It first traverses upward to find the root group, then traverses
+// downward to collect all descendants of that root.
+// Other independent root trees within the same SOT are excluded.
 func (r *repository) FindTree(
 	groupID string,
 	sotID string,
@@ -292,43 +299,53 @@ func (r *repository) FindTree(
 	var groups []entity.AccessGroup
 
 	query := `
-		WITH RECURSIVE
-		ancestors(id) AS (
-			SELECT ?
-			UNION
-			SELECT h.parent_group_id
-			FROM access_group_hierarchies h
-			JOIN ancestors a ON h.child_group_id = a.id
-			WHERE h.sot_id = ?
-		),
-		roots(id) AS (
-			SELECT a.id
-			FROM ancestors a
-			WHERE NOT EXISTS (
-				SELECT 1
-				FROM access_group_hierarchies h
-				WHERE h.sot_id = ?
-				  AND h.child_group_id = a.id
-			)
-		),
-		tree(id) AS (
-			SELECT id FROM roots
-			UNION
-			SELECT h.child_group_id
-			FROM access_group_hierarchies h
-			JOIN tree t ON h.parent_group_id = t.id
-			WHERE h.sot_id = ?
-		)
-		SELECT g.id, g.name
-		FROM access_groups g
-		JOIN tree t ON t.id = g.id
-		WHERE g.sot_id = ?
-		ORDER BY g.name ASC
-	`
+        WITH RECURSIVE
+        ancestors(id) AS (
+            SELECT id
+            FROM access_groups
+            WHERE id = ? AND sot_id = ?
+
+            UNION
+
+            SELECT h.parent_group_id
+            FROM access_group_hierarchies h
+            JOIN ancestors a
+                ON h.child_group_id = a.id
+            WHERE h.sot_id = ?
+        ),
+        root(id) AS (
+            SELECT a.id
+            FROM ancestors a
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM access_group_hierarchies h
+                WHERE h.child_group_id = a.id
+                  AND h.sot_id = ?
+            )
+        ),
+        tree(id) AS (
+            SELECT id FROM root
+
+            UNION
+
+            SELECT h.child_group_id
+            FROM access_group_hierarchies h
+            JOIN tree t
+                ON h.parent_group_id = t.id
+            WHERE h.sot_id = ?
+        )
+        SELECT g.id, g.name
+        FROM access_groups g
+        JOIN tree t
+            ON t.id = g.id
+        WHERE g.sot_id = ?
+        ORDER BY g.name ASC
+    `
 
 	err := r.db.Raw(
 		query,
 		groupID,
+		sotID,
 		sotID,
 		sotID,
 		sotID,
@@ -338,6 +355,8 @@ func (r *repository) FindTree(
 	if err != nil {
 		return nil, err
 	}
+
+	debug.LogJSON("groups tree", groups)
 
 	return groups, nil
 }
@@ -423,10 +442,12 @@ func (r *repository) CanAccessGroup(
 
 	err := r.db.Raw(`
 		WITH RECURSIVE group_path(group_id) AS (
+			-- Start traversal from the parent group.
 			SELECT ?
 
 			UNION
 
+			-- Traverse connected groups only when the wrapped child key is available.
 			SELECT
 				CASE
 					WHEN h.parent_group_id = gp.group_id
@@ -442,11 +463,36 @@ func (r *repository) CanAccessGroup(
 				AND h.wrapped_child_key IS NOT NULL
 				AND TRIM(h.wrapped_child_key) != ''
 		)
-		SELECT COUNT(*)
-		FROM group_path
-		WHERE group_id = ?
-	`, parentGroupID, sotID, childGroupID).
-		Scan(&count).Error
+		SELECT CASE
+			-- Allow access if the target group is reachable through valid wrapped keys.
+			WHEN EXISTS (
+				SELECT 1
+				FROM group_path
+				WHERE group_id = ?
+			) THEN 1
+
+			-- Allow direct parent-child access even when the wrapped child key is empty.
+			WHEN EXISTS (
+				SELECT 1
+				FROM access_group_hierarchies h
+				WHERE h.sot_id = ?
+				  AND (
+					  (h.parent_group_id = ? AND h.child_group_id = ?)
+					  OR
+					  (h.parent_group_id = ? AND h.child_group_id = ?)
+				  )
+			) THEN 1
+
+			ELSE 0
+		END
+	`,
+		parentGroupID,
+		sotID,
+		childGroupID,
+		sotID,
+		parentGroupID, childGroupID,
+		childGroupID, parentGroupID,
+	).Scan(&count).Error
 
 	if err != nil {
 		return false, err

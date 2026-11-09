@@ -130,13 +130,13 @@ func (s *Service) GroupWithChildren(
 	)
 }
 
-// func (s *Service) List(
-// 	sotID string,
-// ) ([]entity.AccessGroup, error) {
-// 	return s.accessgroupService.List(
-// 		sotID,
-// 	)
-// }
+func (s *Service) List(
+	sotID string,
+) ([]entity.AccessGroup, error) {
+	return s.accessgroupService.List(
+		sotID,
+	)
+}
 
 func (s *Service) GetTree(
 	groupID string,

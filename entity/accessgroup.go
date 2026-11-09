@@ -40,5 +40,4 @@ type AccessGroupKey struct {
 
 	AccessGroup AccessGroup `json:"access_group,omitempty" gorm:"foreignKey:AccessGroupID,SotID;references:ID,SotID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	AccessUnit  AccessUnit  `json:"access_unit,omitempty" gorm:"foreignKey:AccessUnitID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	// AccessUnit  AccessUnit  `json:"access_unit,omitempty" gorm:"foreignKey:AccessUnitID,SotID;references:ID,SotID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
