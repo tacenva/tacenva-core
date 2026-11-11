@@ -86,7 +86,7 @@ func (s *Service) UpdateUnit(
 			return genericerror.ErrImutableField
 		}
 		accessUnit.Revoked = current.Revoked
-		err = s.repository.UpdateUnit(tx, accessUnit)
+		err = s.repository.UpdateUnit(tx, sotID, accessUnit)
 		return err
 	})
 }
@@ -127,7 +127,7 @@ func (s *Service) SetRevokeUnit(
 			return err
 		}
 		current.Revoked = isRevoked
-		err = s.repository.UpdateUnit(tx, current)
+		err = s.repository.UpdateUnit(tx, sotID, current)
 		return err
 	})
 }

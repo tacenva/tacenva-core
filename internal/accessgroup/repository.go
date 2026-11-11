@@ -2,7 +2,6 @@ package accessgroup
 
 import (
 	"github.com/tacenva/tacenva-core/contract"
-	"github.com/tacenva/tacenva-core/debug"
 	"github.com/tacenva/tacenva-core/entity"
 	"gorm.io/gorm"
 )
@@ -356,7 +355,7 @@ func (r *repository) FindTree(
 		return nil, err
 	}
 
-	debug.LogJSON("groups tree", groups)
+	// debug.LogJSON("groups tree", groups)
 
 	return groups, nil
 }

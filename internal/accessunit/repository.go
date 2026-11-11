@@ -32,10 +32,11 @@ func (r *repository) CreateGroupKey(
 
 func (r *repository) UpdateUnit(
 	tx *gorm.DB,
+	sotID string,
 	accessUnit *entity.AccessUnit,
 ) error {
 	return tx.Model(&entity.AccessUnit{}).
-		Where("id = ? AND sot_id = ?", accessUnit.ID, accessUnit.SotID).
+		Where("id = ? AND sot_id = ?", accessUnit.ID, sotID).
 		Select("Name", "Level", "Revoked", "AutoApprove").
 		Updates(accessUnit).Error
 }
