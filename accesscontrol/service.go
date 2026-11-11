@@ -172,19 +172,28 @@ func (s *Service) SyncGroups(
 func (s *Service) CreateUnit(
 	authorizer *entity.User,
 	accessUnitReq *contract.AccessUnitSetupReq,
-) error {
+) (*entity.AccessUnit, error) {
+	if accessUnitReq == nil || accessUnitReq.AccessUnit == nil {
+		return nil, genericerror.ErrEmptyValue
+	}
+
 	if err := s.verifyGroupAccess(
 		authorizer,
 		authorizer.AccessUnit.GroupID,
 		accessUnitReq.AccessUnit.GroupID,
 		false,
 	); err != nil {
-		return err
+		return nil, err
 	}
-	return s.accessunitService.CreateUnit(
+
+	if err := s.accessunitService.CreateUnit(
 		authorizer.AccessUnit.SotID,
 		accessUnitReq,
-	)
+	); err != nil {
+		return nil, err
+	}
+
+	return accessUnitReq.AccessUnit, nil
 }
 
 func (s *Service) UpdateUnit(
