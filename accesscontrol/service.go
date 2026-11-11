@@ -52,7 +52,7 @@ func (s *Service) CreateGroup(
 	}
 
 	if accessGroupReq == nil {
-		return genericerror.ErrEmptyValue
+		return genericerror.ErrRequired("access group setup request")
 	}
 	if accessGroupReq.ParentGroupID == "" {
 		return errors.New("No selected parent group")
@@ -174,7 +174,7 @@ func (s *Service) CreateUnit(
 	accessUnitReq *contract.AccessUnitSetupReq,
 ) (*entity.AccessUnit, error) {
 	if accessUnitReq == nil || accessUnitReq.AccessUnit == nil {
-		return nil, genericerror.ErrEmptyValue
+		return nil, genericerror.ErrRequired("access unit")
 	}
 
 	if err := s.verifyGroupAccess(

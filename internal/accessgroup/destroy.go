@@ -1,15 +1,14 @@
 package accessgroup
 
 import (
-	"errors"
-
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
 )
 
 func (s *Service) Destroy(tx *gorm.DB, sotID string) error {
 	if sotID == "" {
-		return errors.New("sot ID is required")
+		return genericerror.ErrRequired("sot id")
 	}
 
 	return s.repository.DestroyBySotID(tx, sotID)

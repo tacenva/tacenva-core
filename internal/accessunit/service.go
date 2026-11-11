@@ -23,13 +23,14 @@ func (s *Service) CreateUnitByTx(
 	accessUnit *entity.AccessUnit,
 	wrappedGroupKey string,
 ) error {
-	if accessUnit == nil {
-		return genericerror.ErrEmptyValue
-	}
-
-	if accessUnit.Name == "" || accessUnit.GroupID == "" ||
-		accessUnit.Level == "" || accessUnit.PublicKey == "" {
-		return genericerror.ErrEmptyValue
+	if err := genericerror.ValidateRequired(map[string]any{
+		"access unit": accessUnit,
+		"name":        accessUnit.Name,
+		"group id":    accessUnit.GroupID,
+		"level":       accessUnit.Level,
+		"public key":  accessUnit.PublicKey,
+	}); err != nil {
+		return err
 	}
 
 	accessUnit.SotID = sotID
@@ -72,7 +73,7 @@ func (s *Service) UpdateUnit(
 	accessUnit *entity.AccessUnit,
 ) error {
 	if accessUnit == nil {
-		return genericerror.ErrEmptyValue
+		return genericerror.ErrRequired("access unit")
 	}
 
 	db := s.repository.db
@@ -152,7 +153,7 @@ func (s *Service) GetGroupKeyByUserID(
 	userID string,
 ) (*contract.GroupKeyData, error) {
 	if userID == "" {
-		return nil, genericerror.ErrEmptyValue
+		return nil, genericerror.ErrRequired("user id")
 	}
 
 	return s.repository.GetGroupKeyByUserID(userID)

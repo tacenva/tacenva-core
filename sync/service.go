@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"github.com/tacenva/tacenva-core/internal/user"
 	"gorm.io/gorm"
 )
@@ -297,12 +298,11 @@ func (s *Service) GetLatestSyncChange(
 	sotID string,
 	entityName string,
 ) (*entity.SyncChange, error) {
-	if sotID == "" {
-		return nil, errors.New("sotID is required")
-	}
-
-	if entityName == "" {
-		return nil, errors.New("entity is required")
+	if err := genericerror.ValidateRequired(map[string]any{
+		"sot id":      sotID,
+		"entity name": entityName,
+	}); err != nil {
+		return nil, err
 	}
 
 	state, err := s.repository.GetSyncState(sotID, entityName)

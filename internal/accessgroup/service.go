@@ -135,7 +135,7 @@ func (s *Service) UpdateGroup(
 	accessGroup *entity.AccessGroup,
 ) error {
 	if accessGroup == nil {
-		return genericerror.ErrEmptyValue
+		return genericerror.ErrRequired("access group")
 	}
 
 	return s.repository.db.Transaction(func(tx *gorm.DB) error {
@@ -270,13 +270,11 @@ func (s *Service) GetTree(
 ) ([]entity.AccessGroup, error) {
 	groupID = strings.TrimSpace(groupID)
 	sotID = strings.TrimSpace(sotID)
-
-	if groupID == "" {
-		return nil, errors.New("access group id cannot be empty")
-	}
-
-	if sotID == "" {
-		return nil, errors.New("sot id cannot be empty")
+	if err := genericerror.ValidateRequired(map[string]any{
+		"access group id": groupID,
+		"sot id":          sotID,
+	}); err != nil {
+		return nil, err
 	}
 
 	return s.repository.FindTree(groupID, sotID)
@@ -313,7 +311,7 @@ func (s *Service) SyncGroups(
 	lastSyncChange *entity.SyncChange,
 ) error {
 	if sotID == "" {
-		return errors.New("sot ID cannot be empty")
+		return genericerror.ErrRequired("sot id")
 	}
 
 	if len(groups) == 0 {
@@ -324,14 +322,8 @@ func (s *Service) SyncGroups(
 	incoming := make(map[string]entity.AccessGroup, len(groups))
 
 	for _, group := range groups {
-		if group.ID == "" {
-			return errors.New("group ID cannot be empty")
-		}
-		if group.Name == "" {
-			return errors.New("group name cannot be empty")
-		}
-		if group.PublicKey != "" {
-			return errors.New("group public key must be empty")
+		if group.ID == "" || group.Name == "" || group.PublicKey != "" {
+			continue
 		}
 		if _, exists := incoming[group.ID]; exists {
 			return errors.New("duplicate group ID: " + group.ID)
@@ -405,8 +397,12 @@ func (s *Service) CanAccessGroup(
 	parentGroupID string,
 	childGroupID string,
 ) (bool, error) {
-	if sotID == "" || parentGroupID == "" || childGroupID == "" {
-		return false, errors.New("sot id and group ids are required")
+	if err := genericerror.ValidateRequired(map[string]any{
+		"sot id":          sotID,
+		"parent group id": parentGroupID,
+		"child group id":  childGroupID,
+	}); err != nil {
+		return false, err
 	}
 
 	if parentGroupID == childGroupID {

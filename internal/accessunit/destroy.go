@@ -1,9 +1,8 @@
 package accessunit
 
 import (
-	"errors"
-
 	"github.com/tacenva/tacenva-core/entity"
+	"github.com/tacenva/tacenva-core/genericerror"
 	"gorm.io/gorm"
 )
 
@@ -13,7 +12,7 @@ func (s *Service) Transaction(fn func(tx *gorm.DB) error) error {
 
 func (s *Service) Destroy(tx *gorm.DB, sotID string) error {
 	if sotID == "" {
-		return errors.New("sot ID is required")
+		return genericerror.ErrRequired("sot id")
 	}
 
 	// 1. Delete access group keys

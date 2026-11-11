@@ -12,7 +12,7 @@ var (
 	errWriterOnly        = errors.New("only users with write access are allowed to perform this action")
 	errGroupAccessDenied = errors.New("you do not have access to this group")
 	errSelfAccessDenied  = errors.New("you are not allowed to perform this action on your own resources")
-	errInvalidAuthorizer = genericerror.ErrEmptyValue
+	errInvalidAuthorizer = genericerror.ErrRequired("authorizer user")
 )
 
 func verifyAdminAccess(authorizer *entity.User) error {
